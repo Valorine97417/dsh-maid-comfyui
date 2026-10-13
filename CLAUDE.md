@@ -23,6 +23,7 @@ node scripts/test-store-params.mjs   # 离线自测：参数保存/重载（需�
 node scripts/test-skillpack.mjs      # 离线自测：技能包 CRUD / 路径穿越防护（需先 build）
 node scripts/test-transfer.mjs       # 离线自测：预设导出/导入回环（需先 build）
 node scripts/test-convert.mjs        # 离线自测：画布分析与图→API 转换回归（需先 build）
+node scripts/test-launch.mjs         # 离线自测：面板一键启动的判据（需先 build；不真拉服务）
 ```
 
 **改动生效规则**：`src/*.ts`（host：tools/routes/store/params/skill…）改完要 **重启 DSH**；`src/client/*` 改完 **刷新页面** 即可。skill 文本编译进 `lib/skill.js`，属 host 侧。
@@ -142,6 +143,7 @@ Agent ──tools──┐
 | `test-skillpack.mjs` | 离线自测：技能包 slug / frontmatter / 文件 CRUD / 尺寸上限 / 路径穿越防护 / 工作流绑定（需先 `npm run build`，它导入 `lib/skillpack.js`） |
 | `test-convert.mjs` | 离线自测：画布分析与图→API 转换——DynamicCombo 扁平（#10）、bypass 直通与越界引用拒绝（#8）、Set/Get 按名配对（作用域、链式、直通输出、缺 setter）、rgthree Relay/Repeater 连线丢弃（#8）（需先 `npm run build`，它导入 `lib/analyze.js`、`lib/convert.js`） |
 | `test-transfer.mjs` | 离线自测：预设导出→分析→导入回环（参数/技能包字节/空目录/requireSkill 逐项断言）、重名 `（导入）` 后缀、zip-slip 防护、格式与版本拒绝（需先 `npm run build`，它导入 `lib/transfer.js`） |
+| `test-launch.mjs` | 离线自测：面板一键启动的判据——服务已在则短路（连 `command()` 都不读）、空命令返回 `launch-not-configured`、spawn 失败报错并在 10 秒冷却内回放同一错误（需先 `npm run build`，它导入 `lib/launch.js`；不真拉服务） |
 | `run-cg-portrait.mjs` / `run-16x9.mjs` | 真机冒烟：打同源路由（默认 `http://127.0.0.1:3080`）跑一次带自定义 prompt 的工作流，需 DSH + ComfyUI 都在运行 |
 
 12. **技能包是"按需披露"，不是常驻 skill**：per-workflow 的技能包**不注册进 `ctx.skills`**。宿主的 skill 目录（`dsh-tool-skill`）会把每个 model-invocable skill 无条件写进一条常驻消息，`modelInvocable: false` 的又会被 `skill` 工具拒绝加载——两头都不满足"用到才可见"。所以披露阶梯挂在 `comfyui_workflow` 上：list 一行摘要 → `action: skill` 取正文 → 模型自己用文件工具读 references。常驻的 `dsh-maid-comfyui-workflows` skill 只负责放那条路由规则。**别把技能包改成 `ctx.skills.register`**，那会让每个工作流都在每轮请求里收费。
