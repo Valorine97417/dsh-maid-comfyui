@@ -48,6 +48,11 @@ let okHideTimer: ReturnType<typeof setTimeout> | null = null
  * only changes when the user edits settings, so one lookup per page load is
  * plenty. `undefined` = not asked yet. */
 let canLaunchCache: boolean | undefined
+/** Set when the user closes the toast themselves: failures then stop popping
+ * up on their own (the panel's own error note still explains the tab), until a
+ * probe succeeds once. Without this, every panel click re-raised the same red
+ * toast and the close button looked broken. */
+let suppressed = false
 /** Skip re-probing while a "connected" verdict is still fresh. */
 let lastOkAt = 0
 
@@ -67,9 +72,12 @@ function clearOkTimer(): void {
   }
 }
 
-/** Close button on the toast; also ends the transient ok feedback early. */
+/** Close button on the toast; also ends the transient ok feedback early. A
+ * dismissed failure is remembered (`suppressed`) so the next panel click does
+ * not paint the same red toast again — the user already read it. */
 export function dismissConnectionToast(): void {
   clearOkTimer()
+  if (state.status === 'fail') suppressed = true
   if (state.status !== 'hidden') setState({ status: 'hidden' })
 }
 
@@ -78,8 +86,12 @@ function canLaunch(): Promise<boolean> {
   if (canLaunchCache !== undefined) return Promise.resolve(canLaunchCache)
   return (async () => {
     try {
-      const payload = (await getJson('/comfyui/config')) as { config?: { canLaunch?: boolean } }
-      canLaunchCache = payload.config?.canLaunch === true
+      // GET /comfyui/config answers the redacted config itself (not wrapped in
+      // a `config` key — only the POST reply wraps it). Reading `payload.config`
+      // here made canLaunch always false, which hid the start button and turned
+      // "start ComfyUI for me" into a dead end.
+      const payload = (await getJson('/comfyui/config')) as { canLaunch?: boolean }
+      canLaunchCache = payload.canLaunch === true
     } catch {
       // An unreadable config is not an answer; keep the offer but let the
       // launch route report the real problem ("启动命令未配置").
@@ -92,8 +104,9 @@ function canLaunch(): Promise<boolean> {
 /** Record a successful connection (shared by probe and launch). */
 function settleOk(payload: { version?: string; latencyMs?: number }): void {
   lastOkAt = Date.now()
-  const recovered = hadFailure
+  const recovered = hadFailure && !suppressed
   hadFailure = false
+  suppressed = false
   if (recovered) {
     // Come-back feedback: a previous failure just resolved.
     setState({ status: 'ok', version: payload.version, latencyMs: payload.latencyMs })
@@ -107,6 +120,9 @@ function settleOk(payload: { version?: string; latencyMs?: number }): void {
 /** Record a failure; the toast keeps the reason and any retry offer. */
 function settleFail(message: string, offer: boolean): void {
   hadFailure = true
+  // A failure the user already dismissed stays dismissed — re-raising the same
+  // red toast on every panel click is what made the close button look broken.
+  if (suppressed) return
   setState({ status: 'fail', message, canLaunch: offer })
 }
 
@@ -115,11 +131,16 @@ function settleFail(message: string, offer: boolean): void {
  * probeConnection because the probe calls it automatically when ComfyUI is
  * down — the user's click should start the server, not ask them to click a
  * second time. Resolves only when the server answers (or the launch gives up).
+ *
+ * `explicit` marks a click on the toast's own button: that is a fresh request,
+ * so it un-suppresses the toast, while the automatic attempt behind a panel
+ * click stays quiet once the user dismissed an earlier failure.
  */
-async function runLaunch(): Promise<void> {
+async function runLaunch(explicit = false): Promise<void> {
   clearOkTimer()
   launchedOnce = true
-  setState({ status: 'launching', canLaunch: state.canLaunch })
+  if (explicit) suppressed = false
+  if (explicit || !suppressed) setState({ status: 'launching', canLaunch: state.canLaunch })
   try {
     const payload = (await postJson('/comfyui/launch', {})) as {
       ok?: boolean
@@ -148,8 +169,10 @@ export function probeConnection(): Promise<void> {
   if (inFlight !== null) return inFlight
   if (Date.now() - lastOkAt < 30_000) return Promise.resolve()
   // A visible fail toast stays up (and keeps its reason) while re-checking;
-  // only upgrade hidden → probing so the check itself never flashes red.
-  if (state.status !== 'fail') {
+  // only upgrade hidden → probing so the check itself never flashes red. A
+  // dismissed failure stays silent: the check still runs, but it no longer
+  // repaints a toast the user just closed.
+  if (state.status !== 'fail' && !suppressed) {
     clearOkTimer()
     setState({ status: 'probing' })
   }
@@ -188,7 +211,7 @@ export function probeConnection(): Promise<void> {
  */
 export function launchConnection(): Promise<void> {
   if (inFlight !== null) return inFlight
-  inFlight = runLaunch().finally(() => {
+  inFlight = runLaunch(true).finally(() => {
     inFlight = null
   })
   return inFlight
