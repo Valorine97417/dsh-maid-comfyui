@@ -46,7 +46,9 @@ A right-docked panel with three tabs:
 
 Clicking the "ComfyUI Panel" button in the session header probes the backend's connection to ComfyUI: a healthy connection stays silent, with a brief "Connected" note only when it recovers from a failure; when it cannot connect, a toast at the top of the page explains why (with the concrete reason) and **the panel still opens** — the toast carries "Start local ComfyUI" and "Open settings" actions, both dismissible, so the window never gets stuck.
 
-"Start local ComfyUI" appears only when both hold: the settings `Launch command` is non-empty and the server address is local (loopback). It runs your command on this machine (e.g. `D:\ComfyUI_windows_portable\run_nvidia_gpu.bat`, with the portable root as working directory), then probes once a second for up to 90 seconds; on success the panel opens, on timeout/failure the reason lands in the toast (the same failure is not retried within 10 seconds). A remote server shows no such button.
+"Start local ComfyUI" appears only when both hold: the settings `Launch command` is non-empty and the server address is local (loopback). It runs your command on this machine (e.g. `D:\ComfyUI_windows_portable\python_embeded\pythonw.exe -s ComfyUI\main.py --windows-standalone-build`, with the portable root as working directory), then probes once a second for up to 90 seconds; on success the panel opens, on timeout/failure the reason lands in the toast (the same failure is not retried within 10 seconds). A remote server shows no such button.
+
+> For a launch with no console window at all, use the portable build's `python_embeded\pythonw.exe` instead of its `run_nvidia_gpu.bat`: that batch file ends in `pause`, and the console window `cmd` opens for it stays up.
 
 The other direction is covered too: a ComfyUI **this plugin started** is stopped automatically once it has been idle for `idleShutdownMinutes` (10 by default), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. Set that field to `0` to disable the behaviour entirely, or press "Stop now" beside it to stop immediately.
 
