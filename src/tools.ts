@@ -113,6 +113,13 @@ export interface ComfyUIRuntime {
    * answers (or the attempt fails). Never throws: the panel turns a failure
    * into an inline notice with the launcher button still available. */
   launchComfyUI(): Promise<LaunchOutcome>
+  /** Stop the local ComfyUI this plugin started (idle shutdown, manual stop).
+   * A server the user started outside the plugin is never a target. */
+  shutdownComfyUI(): Promise<{ ok: boolean; stopped: boolean; error?: string }>
+  /** The launcher's idle bookkeeping, for diagnostics on the settings page. */
+  idleState(): { armed: boolean; port: number | null; idleMs: number; minutes: number }
+  /** A request came in through the browser: restart the idle clock. */
+  noteActivity(): void
 }
 
 /** Execution identity handed to tool execute. */

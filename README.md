@@ -48,6 +48,8 @@ Agent 直接驱动 ComfyUI，无需手动操作画布：
 
 「启动本地 ComfyUI」只在两件事都成立时出现：设置页 `启动命令` 非空，且服务器地址指向本机（回环地址）。点它会在本机跑你填的命令（如 `D:\ComfyUI_windows_portable\run_nvidia_gpu.bat`，工作目录填便携版根目录），然后每 1 秒探一次、最多等 90 秒；起来了就直接进面板，超时/失败会把原因写在提醒条里（同一失败的 10 秒内不重复启动）。远程服务器不显示这个按钮。
 
+反过来也管：**本插件启动的**那个 ComfyUI，空闲 `idleShutdownMinutes`（默认 10 分钟）没人用就会自动关掉，把几 GB 显存还回去——你手动开的那个永远不会被关，有任务在排队 / 在跑也不会关。设置页那项填 `0` 即彻底关掉这个行为；想立刻停，按旁边的「立即停止」。
+
 <p align="center"><img src="images/panel.png" width="70%" alt="插件主面板：工作流 / 资产 / 队列" title="插件主面板：工作流 / 资产 / 队列" /></p>
 
 ### 加载区（媒体加载器）
@@ -76,7 +78,7 @@ Agent 直接驱动 ComfyUI，无需手动操作画布：
 
 生成文件经同源路由（`/comfyui/media`）按文件名转发，不依赖 ComfyUI 内存态历史——重启或清空历史后旧结果照样能打开。浏览器不直接接触 ComfyUI：无 CORS、无混合内容、API Key 不下发。
 
-DH 设置页新增 "ComfyUI" 分区：服务器地址、API Key 环境变量名、启动命令与工作目录、本机 ComfyUI 目录、媒体访问地址、测试连接、界面语言切换，改完即生效，无需改 `cordis.yml`。
+DH 设置页新增 "ComfyUI" 分区：服务器地址、API Key 环境变量名、启动命令与工作目录、空闲自动关闭、本机 ComfyUI 目录、媒体访问地址、测试连接、界面语言切换，改完即生效，无需改 `cordis.yml`。
 
 ## 安装
 
@@ -113,6 +115,7 @@ dsh plugin --profile desktop add dsh-maid-comfyui
 | `comfyuiDirs` | `[]` | 本机 ComfyUI 安装目录列表（可多条），Agent 据此定位 models、自定义节点、TTS 音色库 |
 | `launchCommand` | `''` | 本机 ComfyUI 的启动命令（面板「启动本地 ComfyUI」按钮执行它）。留空 = 不显示按钮 |
 | `launchDir` | `''` | 启动命令的工作目录（便携版填其根目录）。留空 = 本插件运行目录 |
+| `idleShutdownMinutes` | `10` | 空闲这么久没人用，就停掉**本插件启动的**那个 ComfyUI，把显存还回去。`0` = 不自动关闭 |
 | `outputDir` | `''`（自动推断） | ComfyUI 输出目录（删除资产时定位文件用） |
 | `mediaHost` | `''`（自动检测） | 生成媒体的外网访问基址 |
 | `skillsDir` | `''`（默认 `dataDir/skills`） | 技能包根目录（绝对路径，可放同步盘 / 版本库） |

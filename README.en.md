@@ -48,6 +48,8 @@ Clicking the "ComfyUI Panel" button in the session header probes the backend's c
 
 "Start local ComfyUI" appears only when both hold: the settings `Launch command` is non-empty and the server address is local (loopback). It runs your command on this machine (e.g. `D:\ComfyUI_windows_portable\run_nvidia_gpu.bat`, with the portable root as working directory), then probes once a second for up to 90 seconds; on success the panel opens, on timeout/failure the reason lands in the toast (the same failure is not retried within 10 seconds). A remote server shows no such button.
 
+The other direction is covered too: a ComfyUI **this plugin started** is stopped automatically once it has been idle for `idleShutdownMinutes` (10 by default), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. Set that field to `0` to disable the behaviour entirely, or press "Stop now" beside it to stop immediately.
+
 <p align="center"><img src="images/panel.png" width="70%" alt="Main panel: workflows / assets / queue" title="Main panel: workflows / assets / queue" /></p>
 
 ### Load area (media loader)
@@ -113,6 +115,7 @@ For a remote ComfyUI behind an authenticated proxy, provide the key via credenti
 | `comfyuiDirs` | `[]` | Local ComfyUI install dirs (multiple allowed); the agent locates models, custom nodes, TTS voice libraries through these |
 | `launchCommand` | `''` | Command the panel's "Start local ComfyUI" button runs. Empty = no button |
 | `launchDir` | `''` | Working directory for the launch command (the portable root for a portable build). Empty = the plugin's runtime dir |
+| `idleShutdownMinutes` | `10` | Idle minutes after which a ComfyUI **this plugin started** is stopped, returning its VRAM. `0` disables the shutdown |
 | `outputDir` | `''` (inferred) | ComfyUI output dir (used to locate files when deleting assets) |
 | `mediaHost` | `''` (auto) | External base URL for generated media |
 | `skillsDir` | `''` (default `dataDir/skills`) | Skill pack root (absolute path; a synced folder or VCS works) |

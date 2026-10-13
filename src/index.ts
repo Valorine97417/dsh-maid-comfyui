@@ -25,6 +25,7 @@ import { mountComfyUIRoutes } from './routes.js'
 import { mountComfyUIProxy } from './proxy.js'
 import { createHostHint, detectLanOrigin } from './host-hint.js'
 import { createLauncher } from './launch.js'
+import { createIdleShutdown, findListeningPids, killProcessTree, launchMarkerPath, localPortOf } from './idle.js'
 
 export const name = 'dsh-maid-comfyui'
 export { Config }
@@ -188,6 +189,30 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     },
   })
 
+  // Idle shutdown: a launched ComfyUI holds VRAM until something stops it, and
+  // the user pays for that in every other GPU workload. Only an instance this
+  // plugin started is a target; the marker file carries that fact across host
+  // restarts, since the server outlives the plugin's fiber.
+  const busy = async (): Promise<boolean> => {
+    const client = new ComfyUIClient(resolved.baseUrl, await resolveApiKey(ctx, resolved.apiKeyEnv), resolved.connectTimeoutMs, resolved.maxMediaBytes)
+    const view = await client.getQueue()
+    if (view.queue_running.length > 0 || view.queue_pending.length > 0) return true
+    return tracker.list().length > 0
+  }
+  const idle = createIdleShutdown({
+    minutes: () => resolved.idleShutdownMinutes,
+    busy,
+    findPids: findListeningPids,
+    kill: killProcessTree,
+    markerPath: () => launchMarkerPath(resolved.dataDir),
+    log: (message) => {
+      ctx.logger.info(`comfyui: ${message}`)
+    },
+  })
+  ctx.effect(() => () => {
+    idle.dispose()
+  }, 'dsh-maid-comfyui: idle shutdown')
+
   const runtime: ComfyUIRuntime = {
     getConfig: () => resolved,
     getApiKey: () => resolveApiKey(ctx, resolved.apiKeyEnv),
@@ -242,6 +267,10 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
         extraData['extra_pnginfo'] = { workflow: { id: meta.workflowId, name: meta.workflowName } }
       }
       const promptId = await client.queuePrompt(prompt, { extraData })
+      // Agent-driven runs never touch the browser routes, so the idle clock
+      // gets its tick here too: a generation is use, and the window should
+      // count from the end of the work, not from the last panel click.
+      idle.noteActivity()
       tracker.track({ promptId, ts: new Date().toISOString(), workflowName: meta.workflowName, source: meta.source })
       return promptId
     },
@@ -376,7 +405,34 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       }
       return { ok: true, saved, analysis, warnings }
     },
-    launchComfyUI: () => launcher.launch(),
+    launchComfyUI: async () => {
+      const outcome = await launcher.launch()
+      // Only a server this plugin actually started may later be stopped by the
+      // idle watchdog, and only a loopback one (a remote ComfyUI is not ours).
+      if (outcome.ok) {
+        const port = localPortOf(resolved.baseUrl)
+        if (port !== undefined) idle.markLaunched(port)
+      }
+      return outcome
+    },
+    shutdownComfyUI: async () => {
+      const port = localPortOf(resolved.baseUrl)
+      if (port === undefined) return { ok: false, stopped: false, error: 'remote-base-url' }
+      if (!idle.snapshot().armed) return { ok: false, stopped: false, error: 'not-launched-by-plugin' }
+      const pids = await findListeningPids(port)
+      if (pids.length === 0) {
+        idle.clearLaunched()
+        return { ok: true, stopped: false }
+      }
+      await killProcessTree(pids)
+      idle.clearLaunched()
+      ctx.logger.info(`comfyui: stopped on request (port ${String(port)}, pid ${pids.join(',')})`)
+      return { ok: true, stopped: true }
+    },
+    idleState: () => idle.snapshot(),
+    noteActivity: () => {
+      idle.noteActivity()
+    },
   }
 
   // The settings section rides the plugin fiber: a host without a settings
