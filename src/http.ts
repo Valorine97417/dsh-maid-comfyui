@@ -1,5 +1,5 @@
 /**
- * Small HTTP helpers for the dsh-comfyui routes, mirroring the shapes the
+ * Small HTTP helpers for the dsh-maid-comfyui routes, mirroring the shapes the
  * dshmarket bundle uses for its own same-origin API.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'

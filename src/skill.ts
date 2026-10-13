@@ -1,17 +1,17 @@
 /**
- * The dsh-comfyui companion skill: canvas analysis and graph→API extraction
+ * The dsh-maid-comfyui companion skill: canvas analysis and graph→API extraction
  * rules for the model, registered through `ctx.skills.register` (runtime
  * skill, rank 250 — user/project skills can override it).
  */
 
 export const COMFYUI_SKILL = {
-  name: 'dsh-comfyui-workflows',
+  name: 'dsh-maid-comfyui-workflows',
   source: 'runtime',
   description:
     'ComfyUI 工作流管理：区分“图工作流”（ComfyUI 端保存的画布，衍生主题）与“API 工作流”（可执行，运行主题），分析画布中的多个独立流程（连通分量），以及图→API 提取的规则与面板操作引导。也包含本机环境（用户 ComfyUI 目录）与 TTS-Audio-Suite 音色库的快速查询/快照刷新方案。处理 comfyui_workflow、需要定位用户 ComfyUI 文件/音色库，或用户要求运行 ComfyUI 端保存的工作流时加载。',
   whenToUse:
     '用户要求运行/管理 ComfyUI 中保存的工作流，或 comfyui_workflow list 显示未提取的图工作流时；需要判断一个画布是否包含多个独立流程、或解释为何某个工作流无法直接运行时；需要查询 TTS-Audio-Suite 音色库、刷新已存工作流的音色参数快照、或定位用户本机 ComfyUI 目录时；或 comfyui_workflow list 里某个工作流带“技能包”标记、需要在运行前读取它时。',
-  content: `# dsh-comfyui 工作流管理
+  content: `# dsh-maid-comfyui 工作流管理
 
 本插件把 ComfyUI 工作流分成两个主题：
 
@@ -27,7 +27,7 @@ comfyui_workflow 的 \`action: list\` 会同时返回：插件库中的 API 工�
 
 ## TTS-Audio-Suite 音色库查询（先刷新快照，再查询；不用翻插件源码）
 
-TTS-Audio-Suite（\`{comfyuiDir}/custom_nodes/tts_audio_suite\`）的"🎭 Character Voices"（类名 \`CharacterVoicesNode\`）节点用 \`voice_name\` 下拉选音色。音色相关的数据有**两份，都会过期**：TTS 自己的进程缓存（影响下拉与 object_info 的 COMBO），与 dsh-comfyui 存的工作流参数快照（\`~/.dsh/data/dsh-comfyui/workflows.json\` 里每个参数保存时拷贝的 \`options\` / \`numberKind\` / min/max/step，之后**不再自动更新**）。**正确流程：先刷新，再查询**——只查询不刷新，拿到的列表和快照可能不一致，新音色会被运行前校验拒绝。
+TTS-Audio-Suite（\`{comfyuiDir}/custom_nodes/tts_audio_suite\`）的"🎭 Character Voices"（类名 \`CharacterVoicesNode\`）节点用 \`voice_name\` 下拉选音色。音色相关的数据有**两份，都会过期**：TTS 自己的进程缓存（影响下拉与 object_info 的 COMBO），与 dsh-maid-comfyui 存的工作流参数快照（\`~/.dsh/data/dsh-maid-comfyui/workflows.json\` 里每个参数保存时拷贝的 \`options\` / \`numberKind\` / min/max/step，之后**不再自动更新**）。**正确流程：先刷新，再查询**——只查询不刷新，拿到的列表和快照可能不一致，新音色会被运行前校验拒绝。
 
 **第 1 步：刷新**（新音色 / 节点定义变更后做一次）：
 

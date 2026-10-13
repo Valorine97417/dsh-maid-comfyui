@@ -19,7 +19,7 @@ interface PanelGeom {
   height?: number
 }
 
-const GEOM_KEY = 'dsh-comfyui-panel-geom'
+const GEOM_KEY = 'dsh-maid-comfyui-panel-geom'
 
 function loadGeom(): PanelGeom {
   try {
@@ -1259,7 +1259,7 @@ class TabBoundary extends Component<{ t: ComfyUIPanelProps['t']; children?: Reac
   }
 
   override componentDidCatch(error: unknown): void {
-    console.error('[dsh-comfyui] panel tab render error', error)
+    console.error('[dsh-maid-comfyui] panel tab render error', error)
   }
 
   override render(): ReactNode {
@@ -2811,7 +2811,7 @@ function ExportDialog(props: {
       } catch { /* first export ever, or a blip — polling below still works */ }
       const now = new Date()
       const p = (n: number, width = 2): string => String(n).padStart(width, '0')
-      const filename = `dsh-comfyui-presets-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}-${p(now.getMilliseconds(), 3)}-${Math.random().toString(36).slice(2, 8)}.zip`
+      const filename = `dsh-maid-comfyui-presets-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}-${p(now.getMilliseconds(), 3)}-${Math.random().toString(36).slice(2, 8)}.zip`
       const form = document.createElement('form')
       form.method = 'GET'
       form.action = `/comfyui/workflows/export/${filename}`

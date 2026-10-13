@@ -1,5 +1,5 @@
 /**
- * Model-facing tools for dsh-comfyui, registered into the host `tools`
+ * Model-facing tools for dsh-maid-comfyui, registered into the host `tools`
  * registry. `comfyui_run` submits a workflow and returns media results
  * (synchronously or as a background job); `comfyui_object_info` exposes the
  * server's node definitions; `comfyui_workflow` lists and runs saved

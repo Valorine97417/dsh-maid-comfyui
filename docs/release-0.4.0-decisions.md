@@ -1,4 +1,4 @@
-# dsh-comfyui 0.4.0 发布决策（已执行）
+# dsh-maid-comfyui 0.4.0 发布决策（已执行）
 
 **时间**: 2026-09-02 02:00 附近
 **状态**: 代码与清单已改完，待用户自行 npm publish
@@ -7,7 +7,7 @@
 
 用户担忧 0.1.2 API 迁移版插件推送给老宿主（0.1.1-rc.2）用户会导致 dsh 整体启动失败（fail-loud，不隔离插件）。诊断确认双向不兼容后，用户拍板：上安全栏 + 明确版本范围 + 去 beta。
 
-## 已执行改动（D:\dsh-comfyui，均未提交）
+## 已执行改动（D:\dsh-maid-comfyui，均未提交）
 
 1. `package.json` 删除 `peerDependenciesMeta` 中 dsh-settings 的 `optional: true` → peer 必选。**这是关键一步**：dshmarket 兼容预检（compatibility.ts）对 optional peer 一律降级为非风险不报警，摘掉后老宿主上安装会触发 `soft-incompatible` 风险横幅 + 一键回滚。
 2. `package.json` peer 范围 `@deepseek-ai/dsh-settings: ^0.1.2-alpha.4`（保留 alpha 标签，覆盖未来 0.1.x 正式版）。

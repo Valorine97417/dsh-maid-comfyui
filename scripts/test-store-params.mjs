@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ComfyUIStore } from '../lib/store.js'
 
-const dir = mkdtempSync(join(tmpdir(), 'dsh-comfyui-store-test-'))
+const dir = mkdtempSync(join(tmpdir(), 'dsh-maid-comfyui-store-test-'))
 const store = new ComfyUIStore(dir, 200)
 await store.init()
 

@@ -141,7 +141,7 @@ const exported = await buildExportPackage(source, [wfA.id, wfB.id, wfC.id, 'miss
 check('export succeeds', exported.ok === true, exported.ok ? '' : exported.error)
 check('three workflows exported', exported.ok && exported.count === 3)
 check('unknown id reported', exported.ok && exported.warnings.some((w) => w.includes('missing-id')))
-check('ascii download name', exported.ok && /^dsh-comfyui-presets-\d{8}-\d{6}-\d{3}\.zip$/.test(exported.filename), exported.ok ? exported.filename : '')
+check('ascii download name', exported.ok && /^dsh-maid-comfyui-presets-\d{8}-\d{6}-\d{3}\.zip$/.test(exported.filename), exported.ok ? exported.filename : '')
 const zipBytes = Buffer.from(exported.ok ? exported.bytes : [])
 const listing = exported.ok ? Object.keys(unzipSync(new Uint8Array(zipBytes))) : []
 check('manifest present', listing.includes('preset.json'), listing.join(','))

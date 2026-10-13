@@ -43,7 +43,7 @@ while (Date.now() < deadline) {
     const url = `${base}/comfyui/media?file=${encodeURIComponent(preview.filename)}&subfolder=${encodeURIComponent(preview.subfolder ?? '')}&type=${encodeURIComponent(preview.type ?? 'output')}`
     console.log(`URL=${url}`)
     const img = await (await fetch(url, { headers: origin })).arrayBuffer()
-    require('fs').writeFileSync('D:/dsh-comfyui/cg-portrait-16x9.png', Buffer.from(img))
+    require('fs').writeFileSync('D:/dsh-maid-comfyui/cg-portrait-16x9.png', Buffer.from(img))
     console.log(`saved bytes=${Buffer.from(img).length}`)
   }
   process.exit(job.status === 'completed' ? 0 : 1)

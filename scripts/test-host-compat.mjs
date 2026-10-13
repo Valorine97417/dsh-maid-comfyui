@@ -204,7 +204,7 @@ function createHostStub() {
 // ---------------------------------------------------------------------------
 // 1. Load compatibility: apply(ctx, entryConfig) against the 0.2.0 host shape.
 // ---------------------------------------------------------------------------
-const dataDir = mkdtempSync(join(tmpdir(), 'dsh-comfyui-host-compat-'))
+const dataDir = mkdtempSync(join(tmpdir(), 'dsh-maid-comfyui-host-compat-'))
 const { ctx, calls, disposers } = createHostStub()
 
 let applyCompleted = false

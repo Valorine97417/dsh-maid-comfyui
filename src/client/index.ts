@@ -1,5 +1,5 @@
 /**
- * dsh-comfyui client half: registers the comfyui_run tool card and the
+ * dsh-maid-comfyui client half: registers the comfyui_run tool card and the
  * ComfyUI settings page. Registered through slots.inject so contributions
  * wait on the real slot declarations and unwind with this plugin's fiber.
  */
@@ -11,7 +11,7 @@ import { ComfyUIPanel, type ComfyUIPanelProps } from './panel.tsx'
 import { ComfyUITrigger, type ComfyUITriggerProps } from './trigger.tsx'
 import { injectStyles } from './styles.ts'
 
-export const name = 'dsh-comfyui'
+export const name = 'dsh-maid-comfyui'
 export const inject = ['slots']
 
 interface SlotsService {
@@ -28,7 +28,7 @@ export function apply(ctx: ComfyUIClientContext): void {
   // Plugin-local i18n: language comes from localStorage (settings page), not
   // the host locale, so zh/en switching works without a host change.
   const t = makeT(getLang())
-  ctx.effect(() => injectStyles(), 'dsh-comfyui: styles')
+  ctx.effect(() => injectStyles(), 'dsh-maid-comfyui: styles')
 
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
     { name: 'tool.call.toolview', key: 'comfyui_run' },

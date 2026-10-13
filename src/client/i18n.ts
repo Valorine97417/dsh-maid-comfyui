@@ -1,4 +1,4 @@
-/** zh/en dictionaries for dsh-comfyui UI (settings page, tool card, panel). */
+/** zh/en dictionaries for dsh-maid-comfyui UI (settings page, tool card, panel). */
 export const zh = {
   // settings page
   settingsTitle: 'ComfyUI',
@@ -551,7 +551,7 @@ export const en = {
 
 export type Lang = 'zh' | 'en'
 export const LANGS: readonly Lang[] = ['zh', 'en']
-const LANG_KEY = 'dsh-comfyui.lang'
+const LANG_KEY = 'dsh-maid-comfyui.lang'
 
 /** Current plugin UI language, read from localStorage (default zh). */
 export function getLang(): Lang {

@@ -1,5 +1,5 @@
 /**
- * dsh-comfyui stylesheet, injected once with plugin ownership. Colors come
+ * dsh-maid-comfyui stylesheet, injected once with plugin ownership. Colors come
  * from the host theme tokens (--dsw-alias-*), so the UI follows light/dark.
  */
 const CSS = `
@@ -72,7 +72,7 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
   display: flex; align-items: flex-start; gap: 10px;
   max-width: min(560px, 92vw);
   padding: 10px 12px;
-  background: var(--dsw-alias-bg-layer-2);
+  background: var(--dsc-panel-surface, #121f41);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
@@ -108,7 +108,10 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
   max-width: min(92vw, 560px); min-width: 300px;
   z-index: 900;
   display: flex; flex-direction: column;
-  background: var(--dsw-alias-bg-layer-1);
+  /* Fork customization: the panel surface is forced solid. The host token
+     (--dsw-alias-bg-layer-1) is 90% opaque in the maid-atelier theme, so the
+     video backdrop bled through the floating window. */
+  background: var(--dsc-panel-surface, #121f41);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -428,10 +431,10 @@ video.dsc-picker-player { max-height: 180px; }
 /** Inject the stylesheet once (idempotent), owned by this plugin for HMR. */
 export function injectStyles(): void {
   if (typeof document === 'undefined') return
-  if (document.getElementById('dsh-comfyui-styles') !== null) return
+  if (document.getElementById('dsh-maid-comfyui-styles') !== null) return
   const style = document.createElement('style')
-  style.id = 'dsh-comfyui-styles'
-  style.setAttribute('data-plugin', 'dsh-comfyui')
+  style.id = 'dsh-maid-comfyui-styles'
+  style.setAttribute('data-plugin', 'dsh-maid-comfyui')
   style.textContent = CSS
   document.head.append(style)
 }

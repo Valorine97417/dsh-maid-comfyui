@@ -30,7 +30,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
       '6': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
       '7': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
       '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
-      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'dsh-comfyui', images: ['8', 0] } },
+      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'dsh-maid-comfyui', images: ['8', 0] } },
     },
   },
   {
@@ -47,7 +47,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
       '6': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
       '7': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
       '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
-      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'dsh-comfyui', images: ['8', 0] } },
+      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'dsh-maid-comfyui', images: ['8', 0] } },
       '10': { class_type: 'LoadImage', inputs: { image: 'example.png' } },
       '11': { class_type: 'VAEEncode', inputs: { pixels: ['10', 0], vae: ['4', 2] } },
     },
@@ -65,7 +65,7 @@ export const TEMPLATES: WorkflowTemplate[] = [
       '14': { class_type: 'WanImageToVideo', inputs: { positive: ['13', 0], negative: ['13', 1], vae: ['12', 0], width: 832, height: 480, length: 81, batch_size: 1 } },
       '15': { class_type: 'KSampler', inputs: { seed: 0, steps: 20, cfg: 6, sampler_name: 'euler', scheduler: 'simple', denoise: 1, model: ['10', 0], positive: ['13', 0], negative: ['13', 1], latent_image: ['14', 0] } },
       '16': { class_type: 'WanVideoDecode', inputs: { samples: ['15', 0], vae: ['12', 0] } },
-      '17': { class_type: 'SaveVideo', inputs: { filename_prefix: 'dsh-comfyui', video: ['16', 0] } },
+      '17': { class_type: 'SaveVideo', inputs: { filename_prefix: 'dsh-maid-comfyui', video: ['16', 0] } },
     },
   },
 ]

@@ -1,5 +1,5 @@
 /**
- * Browser-facing HTTP routes for dsh-comfyui: configuration (read/redacted,
+ * Browser-facing HTTP routes for dsh-maid-comfyui: configuration (read/redacted,
  * persist through the settings service), a connection probe, the workflow
  * library (list/save/delete/run), the asset index, and the live ComfyUI
  * queue view. Writes are same-origin-only.
@@ -193,7 +193,7 @@ async function readSameOriginPost(request: IncomingMessage, response: ServerResp
 }
 
 /**
- * Mount every dsh-comfyui route on the host web server.
+ * Mount every dsh-maid-comfyui route on the host web server.
  * @returns the disposer, or undefined when no web server is present.
  */
 export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() => void) | undefined {
@@ -1062,7 +1062,7 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
       const filename = decodeURIComponent(url.pathname.slice('/comfyui/workflows/export/'.length))
       // The name is client-supplied but strictly patterned: it only ever
       // feeds a header value and the receipt, never a filesystem path.
-      if (!/^dsh-comfyui-presets-[0-9A-Za-z-]+\.zip$/.test(filename)) {
+      if (!/^dsh-maid-comfyui-presets-[0-9A-Za-z-]+\.zip$/.test(filename)) {
         sendJson(response, 400, { error: 'bad export file name' })
         return
       }

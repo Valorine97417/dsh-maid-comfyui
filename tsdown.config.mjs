@@ -1,4 +1,4 @@
-// Client bundle for dsh-comfyui: emits the __ModuleLoader__.load factory the
+// Client bundle for dsh-maid-comfyui: emits the __ModuleLoader__.load factory the
 // dsh web plugin table serves at /plugins/<package-name>/client.js. Externals
 // are exactly the loader module-table platform entries; everything else inlines.
 import { createRequire } from 'node:module'

@@ -1,7 +1,7 @@
 /**
  * Durable plugin data: the saved-workflow library and the generated-asset
  * index, both persisted as JSON files under the plugin data directory
- * (`dataDir`, default DSH_HOME/data/dsh-comfyui). ComfyUI's own history is
+ * (`dataDir`, default DSH_HOME/data/dsh-maid-comfyui). ComfyUI's own history is
  * ephemeral, so the asset index is the plugin's memory of what it generated.
  */
 import { randomUUID } from 'node:crypto'

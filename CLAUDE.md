@@ -4,9 +4,9 @@
 
 ## 项目概览
 
-`dsh-comfyui` 是 **DeepSeek Harness (DSH / cordis) 的 ComfyUI 插件**：让 Agent 通过工具直接驱动 ComfyUI 生成、处理图像与视频，并在浏览器端提供工作流库 / 资产 / 队列面板、对话内媒体卡片和设置页。
+`dsh-maid-comfyui` 是 **DeepSeek Harness (DSH / cordis) 的 ComfyUI 插件**：让 Agent 通过工具直接驱动 ComfyUI 生成、处理图像与视频，并在浏览器端提供工作流库 / 资产 / 队列面板、对话内媒体卡片和设置页。
 
-- 包名 `dsh-comfyui`，ESM（`"type": "module"`），Node ≥ 22.19，MIT。
+- 包名 `dsh-maid-comfyui`，ESM（`"type": "module"`），Node ≥ 22.19，MIT。
 - 入口：host 侧 `lib/index.js`（由 `src/*.ts` 经 tsc 编译）；浏览器侧 `client/client.js`（由 `src/client/*` 经 tsdown 打包）。
 - peer 依赖：`@deepseek-ai/cordis`（必需）、`@deepseek-ai/dsh-settings`（`^0.1.2-alpha.4 || ^0.1.5-alpha.1 || ^0.1.6-alpha.1 || ^0.1.7-alpha.1`——semver 的预发布版只匹配同一 x.y.z，所以每条宿主线都要单列，**必选**——0.4.0 起摘掉 optional，老宿主安装会触发 dshmarket 风险横幅而非静默降级）。运行时依赖只有 `@deepseek-ai/schemastery`。
 - `cordis.patch.yml` 把插件以 `id: comfyui` 插入 profile 层栈；`package.json` 的 `dsh` 字段声明 bundle patch 与 client 平台/注入。
@@ -38,7 +38,7 @@ Agent ──tools──┐
                ├─→ ComfyUIRuntime（src/index.ts 组装的能力对象）
 浏览器 ─routes─┘        │
                         ├─ ComfyUIClient (comfyui.ts) ──HTTP/WS──→ ComfyUI 服务器
-                        ├─ ComfyUIStore  (store.ts)   ──JSON 文件─→ $DSH_HOME/data/dsh-comfyui/
+                        ├─ ComfyUIStore  (store.ts)   ──JSON 文件─→ $DSH_HOME/data/dsh-maid-comfyui/
                         ├─ QueueTracker  (queue.ts)
                         └─ ProgressTracker (progress.ts, WebSocket)
 浏览器 ←媒体─ /comfyui/media 同源代理 (proxy.ts)
@@ -74,7 +74,7 @@ Agent ──tools──┐
 | `http.ts` | 路由小工具：`sendJson` / `readJsonBody` / `readRawBody` / `sameOrigin` / `errorMessage`。 |
 | `host-hint.ts` | 记住浏览器实际访问用的 origin（Host/Referer），让生成的媒体 URL 对远端浏览器可达；回环 origin 不覆盖已知外部 origin；`detectLanOrigin` 作兜底。 |
 | `skillpack.ts` | 每个工作流可挂一个**技能包**：`<dataDir>/skills/<slug>/` 下的 `SKILL.md` + **任意一层子目录**（`SKILL_PRESET_DIRS` 只是面板下拉的建议名：references/scripts/assets/templates/agents/examples/prompts/commands/docs/data，用户与 Agent 都可以自建目录，`parseSkillDir` 按 `DIR_NAME` 文法校验）。`info()` 从磁盘枚举真实目录（含空目录，走 `dirs` 字段），`makeDir` 建空目录。`SkillPackStore` 管文件读写/重命名/删除并守住路径（文件名文法 + 目录名文法 + `relative()` containment + 扩展名白名单）；**尺寸上限按文件类型而不是按目录**：文本 256KB、二进制（`ASSET_EXTENSIONS`）4MB、每包 20MB/2000 文件（字节上限才是存储保护，文件数只挡病态噪音——真实的外部批量拷贝包如音乐模板库可达上千个小文件，必须完整走通导出→导入回环）；`splitFrontmatter`/`joinFrontmatter` 只认 `summary:` 一个键（不引 YAML 依赖）；`writeBytes`/`readBytes` 走字节，导入的图片与文本共用同一套上限检查（文本 256KB、`assets/` 4MB、每包 20MB/2000 文件），`defaultBucketFor` 按扩展名决定导入落点（md/txt/json/yaml→references、脚本→scripts、图片/csv→assets，导入时可用 `bucket` 显式覆盖）；`createWorkflowSkillPacks` 把目录树绑到工作流库，供 tools 与 routes 共用。slug = `<安全名>-<id前8位>`，工作流改名不迁目录。 |
-| `skill.ts` | 配套 skill `dsh-comfyui-workflows`（runtime，rank 250）：两个主题的区分、画布分析规则、图→API 技术规则、参数与加载区说明、省 token 的运行流程；另含「工作流技能包」（三级披露：list 里的一行摘要 → `action: skill` 取正文 → 正文点名时才读 references 里的单个文件；必读工作流不读会被 run 拒绝）、「本机环境」（先跑 `comfyui_workflow list` 读 `env`，不要反复问用户目录）与「TTS-Audio-Suite 音色库查询」三节（统一章节，正确流程 = **先刷新快照再查询**：刷新用 `action: refresh` / refresh-params 路由按最新 object_info 重算写回 workflows.json 里保存时拷贝的 options，`?refresh=1` 只重扫 TTS 进程缓存；查询分 HTTP 接口 / 文件系统两种方案）。 |
+| `skill.ts` | 配套 skill `dsh-maid-comfyui-workflows`（runtime，rank 250）：两个主题的区分、画布分析规则、图→API 技术规则、参数与加载区说明、省 token 的运行流程；另含「工作流技能包」（三级披露：list 里的一行摘要 → `action: skill` 取正文 → 正文点名时才读 references 里的单个文件；必读工作流不读会被 run 拒绝）、「本机环境」（先跑 `comfyui_workflow list` 读 `env`，不要反复问用户目录）与「TTS-Audio-Suite 音色库查询」三节（统一章节，正确流程 = **先刷新快照再查询**：刷新用 `action: refresh` / refresh-params 路由按最新 object_info 重算写回 workflows.json 里保存时拷贝的 options，`?refresh=1` 只重扫 TTS 进程缓存；查询分 HTTP 接口 / 文件系统两种方案）。 |
 | `transfer.ts` | 工作流**预设导出/导入**（fflate 打 zip）：`buildExportPackage` 把选中工作流连同 `parameters`/`tags`/`requireSkill`/技能包字节打成一个 `.zip`（`preset.json` 清单 + `skills/<原id>/` 文件区）；`analyzeImportPackage` 只解清单列出可导入项（含逐项告警，不写盘）；`applyImportPackage` 把选中项**创建为新工作流**（新 `randomUUID`，重名追加 `（导入）`，技能包经 `enable` + `importFiles` 批量写（限额只查一次；逐文件写每次全量枚举包目录，千文件包是 O(n²) 文件系统调用、表现为导入假死数分钟）+ `makeDir` 原路还原，全部重过文法与尺寸校验）。安全姿态：文件系统路径从不取自 zip 条目名（落盘目录由 `skillSlug(新名, 新id)` 现生成），包内相对路径过 `parseSkillPath`，解压有单条目/总量上限，`version` 主版本更新拒绝导入。选择用**清单下标**（analyze/apply 解析同一份字节，下标稳定），避免对任意包内 id 做转义。 |
 
 ### Agent 工具（`registerComfyUITools`）
@@ -91,7 +91,7 @@ Agent ──tools──┐
 `/comfyui/` 前缀，写操作要求同源：
 
 - 配置与探活：`ping`(GET)、`config`(GET 读脱敏，含 `skillsDir` 与实际生效的 `skillsRoot` / POST 写)、`test`(POST 连接探测)
-- 工作流库：`workflows`(GET/POST)、`workflows/recognize`(POST)、`workflows/input-options`(POST)、`workflows/refresh-params`(POST，body `{ id }`，按最新 object_info 重算该工作流参数快照并写回——先强制 TTS 音色库 `?refresh=1` 重扫，只更新派生字段、保留参数集合，返回 `{ ok, parameters, changed }`)、`workflows/skill`(GET 读技能包清单（含 `dirs` 与 `presetDirs`） / 带 `path` 读单个文件，SKILL.md 额外返回拆好的 `summary`+`body`；POST 动作 `enable` / `disable` / `destroy` / `require` / `mkdir` / `write` / `rename` / `delete`)、`workflows/skill/import`(POST，裸字节 body + query `id`/`name`/可选 `bucket`，落点由扩展名决定，返回最终 `path`)、`workflows/skill/raw`(GET/HEAD，按 `id`+`path` 原样吐字节，带 `nosniff`，供面板预览图片)、`workflows/skill/reveal`(POST，body `{ id }`，在 **DSH 所在机器**上用 explorer/open/xdg-open 打开技能包目录——全项目唯一会拉起本地进程的路由：目录取自 pack store 而非请求、`spawn` 传参数数组不走 shell、要求同源；Agent 工具**没有**这个能力)、`workflows/delete`(POST，body 可带 `deleteSkill: true` 一并销毁技能包)、`workflows/run`(POST)、`workflows/export`(POST，body 收 JSON `{ ids }` **或** urlencoded 表单（`ids` 重复字段）——面板用隐藏 form 原生提交下载：fetch→blob→objectURL 的 JS 下载链路在真实环境产出过 0 字节文件，故弃用；成功时写 `ctx.logger.info` 审计日志（数量+名单+警告，用于排查下载管理器混淆文件），并把打包事实（at/count/names/warnings）存进挂载期闭包变量供 `export/last`(GET) 读回——表单下载的响应体对 JS 不可见，面板靠它向用户报告**实际**打包内容而非勾选框以为的内容；另注册 `export/<文件名>`(**prefix** 路由，GET，`ids` 走 query 重复参数，文件名客户端生成、服务端按 `^dsh-comfyui-presets-[0-9A-Za-z-]+\.zip$` 白名单后用作 content-disposition——面板用 GET form 提交下载：本机的下载管理器会接管/改名/自行重取 POST 下载（"skills 时有时无"的元凶），GET + 文件名入路径使保存名恒等于回执名、重取也得到同 ids 的真实导出)；见 `transfer.ts`)、`workflows/import/analyze`(POST，裸字节 = 预设包，只解析列清单不写盘)、`workflows/import/apply`(POST，裸字节 + query `select=<清单下标逗号列表>`，把选中项创建为新工作流并还原技能包)
+- 工作流库：`workflows`(GET/POST)、`workflows/recognize`(POST)、`workflows/input-options`(POST)、`workflows/refresh-params`(POST，body `{ id }`，按最新 object_info 重算该工作流参数快照并写回——先强制 TTS 音色库 `?refresh=1` 重扫，只更新派生字段、保留参数集合，返回 `{ ok, parameters, changed }`)、`workflows/skill`(GET 读技能包清单（含 `dirs` 与 `presetDirs`） / 带 `path` 读单个文件，SKILL.md 额外返回拆好的 `summary`+`body`；POST 动作 `enable` / `disable` / `destroy` / `require` / `mkdir` / `write` / `rename` / `delete`)、`workflows/skill/import`(POST，裸字节 body + query `id`/`name`/可选 `bucket`，落点由扩展名决定，返回最终 `path`)、`workflows/skill/raw`(GET/HEAD，按 `id`+`path` 原样吐字节，带 `nosniff`，供面板预览图片)、`workflows/skill/reveal`(POST，body `{ id }`，在 **DSH 所在机器**上用 explorer/open/xdg-open 打开技能包目录——全项目唯一会拉起本地进程的路由：目录取自 pack store 而非请求、`spawn` 传参数数组不走 shell、要求同源；Agent 工具**没有**这个能力)、`workflows/delete`(POST，body 可带 `deleteSkill: true` 一并销毁技能包)、`workflows/run`(POST)、`workflows/export`(POST，body 收 JSON `{ ids }` **或** urlencoded 表单（`ids` 重复字段）——面板用隐藏 form 原生提交下载：fetch→blob→objectURL 的 JS 下载链路在真实环境产出过 0 字节文件，故弃用；成功时写 `ctx.logger.info` 审计日志（数量+名单+警告，用于排查下载管理器混淆文件），并把打包事实（at/count/names/warnings）存进挂载期闭包变量供 `export/last`(GET) 读回——表单下载的响应体对 JS 不可见，面板靠它向用户报告**实际**打包内容而非勾选框以为的内容；另注册 `export/<文件名>`(**prefix** 路由，GET，`ids` 走 query 重复参数，文件名客户端生成、服务端按 `^dsh-maid-comfyui-presets-[0-9A-Za-z-]+\.zip$` 白名单后用作 content-disposition——面板用 GET form 提交下载：本机的下载管理器会接管/改名/自行重取 POST 下载（"skills 时有时无"的元凶），GET + 文件名入路径使保存名恒等于回执名、重取也得到同 ids 的真实导出)；见 `transfer.ts`)、`workflows/import/analyze`(POST，裸字节 = 预设包，只解析列清单不写盘)、`workflows/import/apply`(POST，裸字节 + query `select=<清单下标逗号列表>`，把选中项创建为新工作流并还原技能包)
 - ComfyUI 端图工作流：`comfy-workflows`(GET)、`comfy-workflows/analyze`(GET)、`comfy-workflows/extract`(POST)
 - 加载区与媒体：`loadarea`(GET，返回全部加载位)、`current-image`(POST，动作 `pick` / `addSlot` / `clear` / `removeSlot`)、`upload`(POST)、`media-size`(POST)、`media-lookup`(POST)、`media-hash`(POST)、`media`(GET/HEAD，见 `proxy.ts`)
 - 资产与队列：`assets`(GET)、`assets/delete`(POST，删记录 + 删输出文件)、`queue`(GET)、`jobs`(GET)、`jobs/media`(GET，history 里没有时查 `/queue` 区分 `queued`（仍在排队）与 `unknown`（已被清掉），后台任务卡片只对 `unknown` 计超时并尝试从资产索引恢复)、`jobs/actions`(POST)
@@ -113,7 +113,7 @@ Agent ──tools──┐
 
 ## 运行时数据文件
 
-默认 `$DSH_HOME/data/dsh-comfyui/`（未设则 `~/.dsh/data/dsh-comfyui/`），可用配置 `dataDir` 覆盖：
+默认 `$DSH_HOME/data/dsh-maid-comfyui/`（未设则 `~/.dsh/data/dsh-maid-comfyui/`），可用配置 `dataDir` 覆盖：
 
 `workflows.json`（工作流库）、`assets.json`（资产索引）、`current-image.json`（加载区加载位列表，`null` = 空位）、`media-sizes.json`（上传图像素尺寸）、`media-hashes.json`（内容哈希 → 文件名，去重）、`tracked.json`（本插件提交的任务）；另有 `skills/<slug>/` 子目录树（位置可用配置 `skillsDir` 挪到别处）存放各工作流的技能包（`SKILL.md` + `references/` + `scripts/` + `assets/`），由面板编辑、`comfyui_workflow action: skill` 读取。
 
@@ -143,7 +143,7 @@ Agent ──tools──┐
 | `test-transfer.mjs` | 离线自测：预设导出→分析→导入回环（参数/技能包字节/空目录/requireSkill 逐项断言）、重名 `（导入）` 后缀、zip-slip 防护、格式与版本拒绝（需先 `npm run build`，它导入 `lib/transfer.js`） |
 | `run-cg-portrait.mjs` / `run-16x9.mjs` | 真机冒烟：打同源路由（默认 `http://127.0.0.1:3080`）跑一次带自定义 prompt 的工作流，需 DSH + ComfyUI 都在运行 |
 
-12. **技能包是"按需披露"，不是常驻 skill**：per-workflow 的技能包**不注册进 `ctx.skills`**。宿主的 skill 目录（`dsh-tool-skill`）会把每个 model-invocable skill 无条件写进一条常驻消息，`modelInvocable: false` 的又会被 `skill` 工具拒绝加载——两头都不满足"用到才可见"。所以披露阶梯挂在 `comfyui_workflow` 上：list 一行摘要 → `action: skill` 取正文 → 模型自己用文件工具读 references。常驻的 `dsh-comfyui-workflows` skill 只负责放那条路由规则。**别把技能包改成 `ctx.skills.register`**，那会让每个工作流都在每轮请求里收费。
+12. **技能包是"按需披露"，不是常驻 skill**：per-workflow 的技能包**不注册进 `ctx.skills`**。宿主的 skill 目录（`dsh-tool-skill`）会把每个 model-invocable skill 无条件写进一条常驻消息，`modelInvocable: false` 的又会被 `skill` 工具拒绝加载——两头都不满足"用到才可见"。所以披露阶梯挂在 `comfyui_workflow` 上：list 一行摘要 → `action: skill` 取正文 → 模型自己用文件工具读 references。常驻的 `dsh-maid-comfyui-workflows` skill 只负责放那条路由规则。**别把技能包改成 `ctx.skills.register`**，那会让每个工作流都在每轮请求里收费。
 13. **技能包的路径全部不可信**：`path` 来自浏览器、`skillDir` 来自 workflows.json，两者都要过 `parseSkillPath`（文件名文法 + 桶白名单 + 扩展名白名单）再过 `relative()` containment 检查，和 `assets/delete` 同款。根目录只放 `SKILL.md`（它是 `action: skill` 的正文来源，禁改名禁删）。导入路径同理：上传文件名先剥到 base name（`/` 与 `\` 都剥）再进同一套校验，浏览器给的路径一律不当路径用。文本的尺寸上限不是防滥用而是防上下文爆炸（SKILL.md 会整份进模型），`assets/` 的上限才是防滥用。
 14. **删工作流不默认删技能包**：技能包是用户手写的文档，没有别的副本。`workflows/delete` 只在 body 显式带 `deleteSkill: true` 时销毁目录，面板在有技能包时会先问"一起删/只删工作流"。停用（`disable`）同理，只清 `skillDir` 字段、留着目录。
 

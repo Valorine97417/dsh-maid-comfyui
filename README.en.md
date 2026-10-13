@@ -1,29 +1,29 @@
-# dsh-comfyui
+# dsh-maid-comfyui
 
 **English** | [中文](README.md)
 
 <p align="center">
-  <img src="logo.png" width="480" alt="dsh-comfyui logo" />
+  <img src="logo.png" width="480" alt="dsh-maid-comfyui logo" />
 </p>
 
-<h1 align="center">dsh-comfyui</h1>
+<h1 align="center">dsh-maid-comfyui</h1>
 
 <p align="center">Let the DeepSeek Harness agent smartly drive a local or remote ComfyUI to generate anything — with workflow and asset management panels, per-workflow skill packs, a companion skill and a same-origin media proxy.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/dsh-comfyui"><img src="https://img.shields.io/npm/v/dsh-comfyui" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/dsh-comfyui"><img src="https://img.shields.io/npm/dm/dsh-comfyui" alt="npm downloads" /></a>
-  <img src="https://img.shields.io/npm/l/dsh-comfyui" alt="license" />
+  <a href="https://www.npmjs.com/package/dsh-maid-comfyui"><img src="https://img.shields.io/npm/v/dsh-maid-comfyui" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/dsh-maid-comfyui"><img src="https://img.shields.io/npm/dm/dsh-maid-comfyui" alt="npm downloads" /></a>
+  <img src="https://img.shields.io/npm/l/dsh-maid-comfyui" alt="license" />
 </p>
 
 > **Version pairing (pick the right dsh before installing, otherwise dshmarket shows a risk banner)**:
 >
-> | dsh-comfyui | Paired DeepSeek Harness | Notes |
+> | dsh-maid-comfyui | Paired DeepSeek Harness | Notes |
 > | --- | --- | --- |
 > | **0.5.x (latest, `latest` tag)** | **>= 0.1.2** (incl. 0.1.5 / 0.1.6 / 0.1.7 prereleases) | From 0.5.3 the settings page works with dsh 0.1.7's settings model (saves apply live, no restart) |
 > | **0.3.x (beta line, `beta` tag)** | **0.1.1** | On older dsh versions stay on the 0.3.x line |
 >
-> Install: `dsh plugin --profile web add dsh-comfyui` (latest 0.5.x) / `dsh plugin --profile web add dsh-comfyui@beta` (0.3.x for older hosts).
+> Install: `dsh plugin --profile web add dsh-maid-comfyui` (latest 0.5.x) / `dsh plugin --profile web add dsh-maid-comfyui@beta` (0.3.x for older hosts).
 
 ## Features
 
@@ -80,9 +80,9 @@ The DH settings page gets a "ComfyUI" section: server address, API key env var n
 
 ```sh
 # web profile
-dsh plugin --profile web add dsh-comfyui
+dsh plugin --profile web add dsh-maid-comfyui
 # desktop profile
-dsh plugin --profile desktop add dsh-comfyui
+dsh plugin --profile desktop add dsh-maid-comfyui
 ```
 
 After restarting the app: a panel entry appears in the sidebar, a "ComfyUI" section in settings, and the agent gets all tools plus the companion skill right away.

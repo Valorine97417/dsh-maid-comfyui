@@ -1,5 +1,5 @@
 /**
- * dsh-comfyui host configuration. The same schema drives the Loader entry
+ * dsh-maid-comfyui host configuration. The same schema drives the Loader entry
  * config (cordis.yml patch) and the settings page, so one shape covers both
  * doors into the same values.
  *
@@ -27,7 +27,7 @@ export const Config = z.object({
   maxMediaItems: z.number().min(1).max(50).default(12).volatile(),
   /** Max bytes the media proxy streams for one file. */
   maxMediaBytes: z.number().min(64 * 1024).max(512 * 1024 * 1024).default(64 * 1024 * 1024).volatile(),
-  /** Directory for plugin data (workflow library, asset index); empty means DSH_HOME/data/dsh-comfyui. */
+  /** Directory for plugin data (workflow library, asset index); empty means DSH_HOME/data/dsh-maid-comfyui. */
   dataDir: z.string().default(''),
   /** Max asset records kept in the asset index. */
   maxAssets: z.number().min(1).max(10_000).default(200),
@@ -67,7 +67,7 @@ export type Config = {
   maxMediaItems: number
   /** Max bytes the media proxy streams for one file. */
   maxMediaBytes: number
-  /** Directory for plugin data (workflow library, asset index); empty means DSH_HOME/data/dsh-comfyui. */
+  /** Directory for plugin data (workflow library, asset index); empty means DSH_HOME/data/dsh-maid-comfyui. */
   dataDir: string
   /** Max asset records kept in the asset index. */
   maxAssets: number

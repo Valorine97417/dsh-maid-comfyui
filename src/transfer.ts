@@ -25,7 +25,7 @@ import { validateWorkflow, type StoredWorkflow } from './store.js'
 import { parseSkillPath, sizeLimitOf, SKILL_MAIN, type SkillPackResult, type WorkflowSkillPack } from './skillpack.js'
 
 /** Marker plus layout version of the packages this module writes. */
-export const PRESET_FORMAT = 'dsh-comfyui-workflow-preset'
+export const PRESET_FORMAT = 'dsh-maid-comfyui-workflow-preset'
 export const PRESET_VERSION = 1
 
 /** Manifest file name inside the archive. */
@@ -244,7 +244,7 @@ export async function buildExportPackage(host: TransferHost, ids: unknown): Prom
   return {
     ok: true,
     bytes,
-    filename: `dsh-comfyui-presets-${stamp()}.zip`,
+    filename: `dsh-maid-comfyui-presets-${stamp()}.zip`,
     count: exported.length,
     names: exported.map((entry) => entry.name),
     warnings,
@@ -255,7 +255,7 @@ export async function buildExportPackage(host: TransferHost, ids: unknown): Prom
 function parseManifest(value: unknown): PresetManifest | string {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'preset.json 结构不正确'
   const raw = value as Record<string, unknown>
-  if (raw.format !== PRESET_FORMAT) return '这不是 dsh-comfyui 工作流预设包'
+  if (raw.format !== PRESET_FORMAT) return '这不是 dsh-maid-comfyui 工作流预设包'
   const version = raw.version
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return '预设包版本号不正确'
   if (version > PRESET_VERSION) return `预设包版本过新（v${version}），请升级插件后再导入`

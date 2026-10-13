@@ -1,7 +1,7 @@
 /**
  * Minimal ComfyUI HTTP API client: queue a workflow, poll history for
  * completion, read object_info/system_stats, and fetch generated media.
- * Only the endpoints dsh-comfyui needs are implemented; the server's own
+ * Only the endpoints dsh-maid-comfyui needs are implemented; the server's own
  * WebSocket progress channel is deliberately unused (history polling is
  * simpler and works across proxies and remote installs).
  */

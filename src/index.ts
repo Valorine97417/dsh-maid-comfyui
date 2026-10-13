@@ -1,5 +1,5 @@
 /**
- * dsh-comfyui host entry: wires the tools, HTTP routes, and media proxy, and
+ * dsh-maid-comfyui host entry: wires the tools, HTTP routes, and media proxy, and
  * registers the `comfyui:` settings section so the browser settings page can
  * persist config without editing cordis.yml. Everything unmounts with the
  * plugin fiber.
@@ -25,7 +25,7 @@ import { mountComfyUIRoutes } from './routes.js'
 import { mountComfyUIProxy } from './proxy.js'
 import { createHostHint, detectLanOrigin } from './host-hint.js'
 
-export const name = 'dsh-comfyui'
+export const name = 'dsh-maid-comfyui'
 export { Config }
 
 /**
@@ -96,7 +96,7 @@ async function resolveApiKey(ctx: Context, envName: string): Promise<string | un
 /** Default plugin data directory under the harness home. */
 function defaultDataDir(): string {
   const base = process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  return join(base, 'data', 'dsh-comfyui')
+  return join(base, 'data', 'dsh-maid-comfyui')
 }
 
 /**
@@ -146,7 +146,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
   ctx.effect(() => {
     progress.attach(attachedUrl)
     return () => progress.dispose()
-  }, 'dsh-comfyui: progress')
+  }, 'dsh-maid-comfyui: progress')
   /** Pick up a new config in place; a new baseUrl re-points the progress socket. */
   const refreshConfig = (next: ConfigType): void => {
     Object.assign(resolved, next)
@@ -377,7 +377,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     // own settings page, so opt out of any auto-generated one.
     if (typeof settings.configure === 'function') {
       const configure = settings.configure.bind(settings)
-      settingsCtx.effect(() => configure({ auto: false }, ctx.fiber), 'dsh-comfyui: settings page policy')
+      settingsCtx.effect(() => configure({ auto: false }, ctx.fiber), 'dsh-maid-comfyui: settings page policy')
     }
   })
 
@@ -386,7 +386,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     return () => {
       for (const dispose of disposers) dispose()
     }
-  }, 'dsh-comfyui: tools')
+  }, 'dsh-maid-comfyui: tools')
 
   // The companion skill rides the same optional-services pattern: headless
   // hosts without a skills service simply skip it. Runtime skills register at
@@ -398,7 +398,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       ...COMFYUI_SKILL,
       content: COMFYUI_SKILL.content,
     })
-  }, 'dsh-comfyui: skill')
+  }, 'dsh-maid-comfyui: skill')
 
   // Routes and the media proxy ride a `webServer` sub-fiber rather than a
   // one-shot `ctx.get` at apply time: loader entries settle concurrently, so
@@ -419,13 +419,13 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       const webServer = webCtx.get('webServer') as { tapIndex(transform: (html: string) => string): () => void } | undefined
       if (webServer !== undefined) {
         disposers.push(webServer.tapIndex((html) => {
-          if (html.includes('dsh-comfyui-ping')) return html
-          return html.replace('</head>', '<script>/* dsh-comfyui-ping */try{fetch("/comfyui/ping",{cache:"no-store"})}catch(e){}</script></head>')
+          if (html.includes('dsh-maid-comfyui-ping')) return html
+          return html.replace('</head>', '<script>/* dsh-maid-comfyui-ping */try{fetch("/comfyui/ping",{cache:"no-store"})}catch(e){}</script></head>')
         }))
       }
       return () => {
         for (const dispose of disposers) dispose()
       }
-    }, 'dsh-comfyui: routes and media proxy')
+    }, 'dsh-maid-comfyui: routes and media proxy')
   })
 }
