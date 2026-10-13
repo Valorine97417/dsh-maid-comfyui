@@ -44,7 +44,9 @@ A right-docked panel with three tabs:
 - **Assets** — every generated result with preview, download, and hover-to-delete (also removes the file from the ComfyUI output directory).
 - **Queue** — live queue plus full history in five states, with delete / interrupt / rerun / clear / free-memory actions; plugin-submitted jobs show a progress bar and preview.
 
-Clicking the "ComfyUI Panel" button in the session header probes the backend's connection to ComfyUI: when it cannot connect, the panel closes again (the button does not stay highlighted) and a toast at the top of the page explains why (with the concrete reason), asking you to start the local ComfyUI (so the backend can see its port) or check the remote server URL in settings; a healthy connection stays silent, with a brief "Connected" note only when it recovers from a failure.
+Clicking the "ComfyUI Panel" button in the session header probes the backend's connection to ComfyUI: a healthy connection stays silent, with a brief "Connected" note only when it recovers from a failure; when it cannot connect, a toast at the top of the page explains why (with the concrete reason) and **the panel still opens** — the toast carries "Start local ComfyUI" and "Open settings" actions, both dismissible, so the window never gets stuck.
+
+"Start local ComfyUI" appears only when both hold: the settings `Launch command` is non-empty and the server address is local (loopback). It runs your command on this machine (e.g. `D:\ComfyUI_windows_portable\run_nvidia_gpu.bat`, with the portable root as working directory), then probes once a second for up to 90 seconds; on success the panel opens, on timeout/failure the reason lands in the toast (the same failure is not retried within 10 seconds). A remote server shows no such button.
 
 <p align="center"><img src="images/panel.png" width="70%" alt="Main panel: workflows / assets / queue" title="Main panel: workflows / assets / queue" /></p>
 
@@ -74,7 +76,7 @@ A parameter list tells the agent which knobs exist, not what the workflow is *fo
 
 Generated files are served through a same-origin route (`/comfyui/media`) addressed by file name, independent of ComfyUI's in-memory history — old results keep opening after a restart or a history clear. The browser never touches ComfyUI directly: no CORS, no mixed content, and the API key never leaves the host.
 
-The DH settings page gets a "ComfyUI" section: server address, API key env var name, local ComfyUI directories, media host, connection test and a zh/en UI language switch — applied immediately, no `cordis.yml` edits needed.
+The DH settings page gets a "ComfyUI" section: server address, API key env var name, launch command and working directory, local ComfyUI directories, media host, connection test and a zh/en UI language switch — applied immediately, no `cordis.yml` edits needed.
 
 ## Install
 
@@ -109,6 +111,8 @@ For a remote ComfyUI behind an authenticated proxy, provide the key via credenti
 | `apiKeyEnv` | `COMFYUI_API_KEY` | Optional API key env var / credential name |
 | `dataDir` | *(DSH data dir)* | Where the workflow library and asset index live |
 | `comfyuiDirs` | `[]` | Local ComfyUI install dirs (multiple allowed); the agent locates models, custom nodes, TTS voice libraries through these |
+| `launchCommand` | `''` | Command the panel's "Start local ComfyUI" button runs. Empty = no button |
+| `launchDir` | `''` | Working directory for the launch command (the portable root for a portable build). Empty = the plugin's runtime dir |
 | `outputDir` | `''` (inferred) | ComfyUI output dir (used to locate files when deleting assets) |
 | `mediaHost` | `''` (auto) | External base URL for generated media |
 | `skillsDir` | `''` (default `dataDir/skills`) | Skill pack root (absolute path; a synced folder or VCS works) |

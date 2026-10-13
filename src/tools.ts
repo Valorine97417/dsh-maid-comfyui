@@ -15,6 +15,7 @@ import type { RunProgress } from './progress.js'
 import type { QueuedRun } from './queue.js'
 import { refreshParameterMetadata, type Workflow, type WorkflowParameter } from './params.js'
 import type { HostHint } from './host-hint.js'
+import type { LaunchOutcome } from './launch.js'
 import { SKILL_MAIN, joinFrontmatter, type WorkflowSkillPacks } from './skillpack.js'
 
 /** A workflow saved on the ComfyUI server (userdata/workflows), with extract status. */
@@ -108,6 +109,10 @@ export interface ComfyUIRuntime {
     file: string
     mode: 'all' | 'split' | 'main'
   }): Promise<{ ok: true; saved: StoredWorkflow[]; analysis: GraphAnalysis; warnings: string[] } | { ok: false; error: string }>
+  /** Start the user's local ComfyUI when it is down, resolving only once it
+   * answers (or the attempt fails). Never throws: the panel turns a failure
+   * into an inline notice with the launcher button still available. */
+  launchComfyUI(): Promise<LaunchOutcome>
 }
 
 /** Execution identity handed to tool execute. */

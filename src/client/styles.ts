@@ -92,6 +92,10 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
 .dsc-conn-toast--fail .dsc-conn-toast-title { color: var(--dsw-alias-state-error-primary); }
 .dsc-conn-toast--ok .dsc-conn-toast-title { color: var(--dsw-alias-state-success-primary); }
 .dsc-conn-toast-text { color: var(--dsw-alias-label-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+/* The fail body stacks message + action: the launcher button must sit below
+   the text, not stretch the single-line toast into a wide bar. */
+.dsc-conn-toast-body-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.dsc-conn-toast-action { flex: none; }
 .dsc-conn-toast-close { flex: none; border: none; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font-size: 13px; padding: 2px 4px; line-height: 1; }
 .dsc-conn-toast-close:hover { color: var(--dsw-alias-label-primary); }
 @keyframes dsc-conn-toast-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }

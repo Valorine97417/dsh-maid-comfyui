@@ -21,6 +21,8 @@ interface ConfigView {
   maxMediaItems: number
   mediaHost: string
   comfyuiDirs: string[]
+  launchCommand: string
+  launchDir: string
   skillsDir: string
   /** The path packs actually use, including the `<dataDir>/skills` default. */
   skillsRoot: string
@@ -39,6 +41,8 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
   const [apiKeyEnv, setApiKeyEnv] = useState('')
   const [mediaHost, setMediaHost] = useState('')
   const [comfyuiDirs, setComfyuiDirs] = useState<string[]>([])
+  const [launchCommand, setLaunchCommand] = useState('')
+  const [launchDir, setLaunchDir] = useState('')
   const [skillsDir, setSkillsDir] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -56,6 +60,8 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
       setApiKeyEnv(view.apiKeyEnv)
       setMediaHost(view.mediaHost ?? '')
       setComfyuiDirs(Array.isArray(view.comfyuiDirs) ? view.comfyuiDirs : [])
+      setLaunchCommand(view.launchCommand ?? '')
+      setLaunchDir(view.launchDir ?? '')
       setSkillsDir(view.skillsDir ?? '')
     }).catch((error: unknown) => {
       if (cancelled) return
@@ -72,13 +78,15 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
     try {
       // Trim blanks and drop empty rows before persisting.
       const dirs = comfyuiDirs.map((dir) => dir.trim()).filter((dir) => dir !== '')
-      const payload = (await postJson('/comfyui/config', { patch: { baseUrl, apiKeyEnv, mediaHost, comfyuiDirs: dirs, skillsDir: skillsDir.trim() } })) as { config?: ConfigView }
+      const payload = (await postJson('/comfyui/config', { patch: { baseUrl, apiKeyEnv, mediaHost, comfyuiDirs: dirs, launchCommand: launchCommand.trim(), launchDir: launchDir.trim(), skillsDir: skillsDir.trim() } })) as { config?: ConfigView }
       if (payload.config !== undefined) {
         setConfig(payload.config)
         setBaseUrl(payload.config.baseUrl)
         setApiKeyEnv(payload.config.apiKeyEnv)
         setMediaHost(payload.config.mediaHost ?? '')
         setComfyuiDirs(payload.config.comfyuiDirs ?? [])
+        setLaunchCommand(payload.config.launchCommand ?? '')
+        setLaunchDir(payload.config.launchDir ?? '')
         setSkillsDir(payload.config.skillsDir ?? '')
       }
       setSaveState('saved')
@@ -143,6 +151,26 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
         onChange: (event: { target: { value: string } }) => { setBaseUrl(event.target.value); setSaveState('idle') },
       }),
       h('div', { className: 'dsc-hint' }, t('baseUrlHint')),
+    ),
+    h('div', { className: 'dsc-field' },
+      h('label', null, t('launchCommand')),
+      h('input', {
+        className: 'dsc-input',
+        value: launchCommand,
+        placeholder: 'D:\\ComfyUI_windows_portable\\run_nvidia_gpu.bat',
+        onChange: (event: { target: { value: string } }) => { setLaunchCommand(event.target.value); setSaveState('idle') },
+      }),
+      h('div', { className: 'dsc-hint' }, t('launchCommandHint')),
+    ),
+    h('div', { className: 'dsc-field' },
+      h('label', null, t('launchDir')),
+      h('input', {
+        className: 'dsc-input',
+        value: launchDir,
+        placeholder: 'D:\\ComfyUI_windows_portable',
+        onChange: (event: { target: { value: string } }) => { setLaunchDir(event.target.value); setSaveState('idle') },
+      }),
+      h('div', { className: 'dsc-hint' }, t('launchDirHint')),
     ),
     h('div', { className: 'dsc-field' },
       h('label', null, t('apiKeyEnv')),

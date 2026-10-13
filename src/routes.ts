@@ -152,6 +152,13 @@ function redact(runtime: ComfyUIRuntime, apiKey: string | undefined): Record<str
     maxMediaItems: config.maxMediaItems,
     mediaHost: config.mediaHost,
     comfyuiDirs: config.comfyuiDirs,
+    launchCommand: config.launchCommand,
+    launchDir: config.launchDir,
+    // The panel hides its launcher button when it could not help: a button that
+    // can only fail reads worse than no button. Two ways it cannot help — no
+    // command configured, or a REMOTE server (starting a local ComfyUI would
+    // not bring that one up).
+    canLaunch: config.launchCommand.trim() !== '' && isLocalBaseUrl(config.baseUrl),
     skillsDir: config.skillsDir,
     // The path actually in use, so the page can show where packs land even
     // when skillsDir is empty (the `<dataDir>/skills` default).
@@ -162,6 +169,25 @@ function redact(runtime: ComfyUIRuntime, apiKey: string | undefined): Record<str
 
 function methodIs(request: IncomingMessage, method: string): boolean {
   return request.method === method
+}
+
+/**
+ * Whether the configured ComfyUI is on this machine.
+ *
+ * The launcher only helps for a local server: running a command here cannot
+ * bring up a remote one, and offering the button anyway would blame the user's
+ * setup for a network problem. An unparsable URL counts as local — the config
+ * default is loopback, and a typo should surface from the probe, not by hiding
+ * a button that might be the fix.
+ */
+function isLocalBaseUrl(baseUrl: string): boolean {
+  let host: string
+  try {
+    host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, '')
+  } catch {
+    return true
+  }
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '0.0.0.0'
 }
 
 /**
@@ -287,6 +313,37 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
           error: `${errorMessage(error)}（探测地址 ${runtime.getConfig().baseUrl}）`,
           latencyMs: Date.now() - startedAt,
         })
+      }
+    }),
+  }))
+
+  disposers.push(webServer.register({
+    kind: 'exact',
+    path: '/comfyui/launch',
+    handler: withHint(async (request, response) => {
+      if (!methodIs(request, 'POST')) {
+        sendJson(response, 405, { error: 'method not allowed' })
+        return
+      }
+      if (!sameOrigin(request)) {
+        sendJson(response, 403, { error: 'forbidden: same-origin requests only' })
+        return
+      }
+      // Launching is a side effect on the user's machine, so it stays behind an
+      // explicit POST from the panel's start button — never a GET the browser
+      // could prefetch. The call resolves only when the server answers (up to
+      // the launcher's 90s budget) or the attempt fails, so the panel can show
+      // one honest outcome instead of polling on its own.
+      try {
+        const result = await runtime.launchComfyUI()
+        sendJson(response, 200, {
+          ok: result.ok,
+          started: result.started === true,
+          version: result.version,
+          error: result.error,
+        })
+      } catch (error) {
+        sendJson(response, 200, { ok: false, started: false, error: errorMessage(error) })
       }
     }),
   }))

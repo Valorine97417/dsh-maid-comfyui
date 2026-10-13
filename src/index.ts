@@ -24,6 +24,7 @@ import { registerComfyUITools, type ComfyUIRuntime } from './tools.js'
 import { mountComfyUIRoutes } from './routes.js'
 import { mountComfyUIProxy } from './proxy.js'
 import { createHostHint, detectLanOrigin } from './host-hint.js'
+import { createLauncher } from './launch.js'
 
 export const name = 'dsh-maid-comfyui'
 export { Config }
@@ -164,6 +165,28 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
   }) as never)
 
   const hostHint = createHostHint()
+
+  // The panel's "start" button. Opening the panel while ComfyUI is down used
+  // to dead-end: a sticky red toast plus a window that only closed by
+  // reloading. The launcher runs the user's own command and reports success
+  // only once the server answers /system_stats — the same check the settings
+  // "test" button uses, so "up" means one thing in both places.
+  const launcher = createLauncher({
+    command: () => resolved.launchCommand,
+    dir: () => resolved.launchDir,
+    probe: async () => {
+      try {
+        const client = new ComfyUIClient(resolved.baseUrl, await resolveApiKey(ctx, resolved.apiKeyEnv), resolved.connectTimeoutMs, resolved.maxMediaBytes)
+        const stats = await client.systemStats()
+        return { ok: true, version: stats.system?.comfyui_version ?? 'unknown' }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    log: (message) => {
+      ctx.logger.info(`comfyui: ${message}`)
+    },
+  })
 
   const runtime: ComfyUIRuntime = {
     getConfig: () => resolved,
@@ -353,6 +376,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       }
       return { ok: true, saved, analysis, warnings }
     },
+    launchComfyUI: () => launcher.launch(),
   }
 
   // The settings section rides the plugin fiber: a host without a settings

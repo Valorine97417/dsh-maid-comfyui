@@ -50,6 +50,12 @@ export const Config = z.object({
    * locate ComfyUI files directly (workflows, models, the TTS-Audio-Suite
    * voice library) without guessing or asking the user. */
   comfyuiDirs: z.array(z.string()).default([]).volatile(),
+  /** Shell command that starts a local ComfyUI, e.g.
+   * `D:\ComfyUI_windows_portable\run_nvidia_gpu.bat`. Empty hides the panel's
+   * "start" button; the plugin never guesses a launcher. */
+  launchCommand: z.string().default('').volatile(),
+  /** Working directory for `launchCommand`; empty = the host process cwd. */
+  launchDir: z.string().default('').volatile(),
 })
 
 export type Config = {
@@ -79,6 +85,10 @@ export type Config = {
   outputDir: string
   /** ComfyUI install root(s) on this machine; the agent uses them to locate files directly. */
   comfyuiDirs: string[]
+  /** Shell command that starts a local ComfyUI; empty disables the panel's start button. */
+  launchCommand: string
+  /** Working directory for `launchCommand`; empty = the host process cwd. */
+  launchDir: string
 }
 
 /** The volatile-reference protocol shared across cosmokit copies (Symbol.for). */
@@ -121,5 +131,7 @@ export function resolveConfig(raw: Partial<Record<keyof Config, unknown>>, defau
     comfyuiDirs: Array.isArray(dirs)
       ? dirs.filter((dir): dir is string => typeof dir === 'string' && dir.trim() !== '')
       : [],
+    launchCommand: str(current(raw.launchCommand), ''),
+    launchDir: str(current(raw.launchDir), ''),
   }
 }
