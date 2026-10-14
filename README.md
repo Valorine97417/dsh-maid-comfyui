@@ -107,6 +107,31 @@ dsh plugin --profile desktop add dsh-maid-comfyui
 
 远程 ComfyUI 若位于需鉴权的代理之后，通过凭据存储或 `apiKeyEnv` 指定的环境变量（默认 `COMFYUI_API_KEY`）提供密钥，绝不发给浏览器。
 
+### 子图工作流（画布把主体封进了 subgraph）
+
+新版 ComfyUI 画布可以把一整段流程收进**子图**，存盘后顶层只剩一个 type 等于子图 UUID 的实例节点。这类图工作流**面板里提取不了**——分析器把子图当黑盒，会报「包含未注册的 UI-only 节点 "<uuid>"」。两条路：
+
+1. **在 ComfyUI 里转回普通节点**：右键子图 → `Unpack`（展开），保存后再到面板点**提取**。
+2. **用仓库自带的转换器**（离线、可脚本化，不用动画布）：
+
+```bash
+node scripts/subgraph-to-api.mjs <画布工作流.json> [输出.json]
+# 选项：--base-url <url>    ComfyUI 地址（默认 http://127.0.0.1:8188），用它实时拉 object_info
+#       --object-info <file> 改用本地 object_info 转储（离线 / 不连 ComfyUI）
+#       --quiet              不打印转换后的工作流 JSON
+```
+
+它做两件事：先把子图实例**内联摊平**（`-10` / `-20` 两个虚拟端口接成真连线），再按 `object_info` 契约把画布图转成可 `POST /prompt` 的 API 格式。产物可直接经 `/comfyui/workflows` 路由存进本插件的工作流库。
+
+转换规则（都已实测校验，改脚本前先看这几条）：
+
+- 子图实例的 `widgets_values` 按**子图定义的槽位顺序**对齐，只有 widget 型槽（STRING/INT/FLOAT/BOOLEAN/COMBO）占一格——**该槽就算有外部连线也照样占一格**，数错就整条错位。
+- 节点的 `widgets_values` 顺序 == `object_info` 的 required 全部 → optional 全部（只算 widget 型）；`control_after_generate` 多占一格、消费后丢弃；`forceInput` 的 widget 不占格；`COMFY_DYNAMICCOMBO_V3` 的 master 占一格、子项名是 `master.sub`。
+- Autogrow 组（`COMFY_AUTOGROW_V3`）的输入名**必须保留组前缀**（`images.image0`），剥掉会让 `/prompt` 返回 400 `required_input_missing`。
+- 只存在于画布上的前端节点（`MarkdownNote`、`ImageCompare` 等）按 `object_info` 里是否含前端专属输入类型来识别并跳过。
+
+自测：`node scripts/test-subgraph-to-api.mjs`（纯离线 fixture，不连 ComfyUI）。
+
 ## 配置
 
 `cordis.yml` 的 `comfyui` 段（多数可在设置页改）：

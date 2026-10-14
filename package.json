@@ -33,6 +33,8 @@
     "build:host": "tsc -p tsconfig.json",
     "build:client": "tsdown -c tsdown.config.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "subgraph-to-api": "node scripts/subgraph-to-api.mjs",
+    "test:subgraph-to-api": "node scripts/test-subgraph-to-api.mjs",
     "test:host-compat": "npm run build:host && node scripts/test-host-compat.mjs",
     "prepack": "npm run build"
   },

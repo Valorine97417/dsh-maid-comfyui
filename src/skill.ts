@@ -72,7 +72,7 @@ TTS-Audio-Suite（\`{comfyuiDir}/custom_nodes/tts_audio_suite\`）的"🎭 Chara
 - **Reroute 与 bypass（mode 4）节点直通**：输出跟随其第一条有连线的输入。
 - **虚拟节点先改线再转换**（分析与转换共用同一规则）：KJNodes \`SetNode\`/\`GetNode\` 按名称配对——\`GetNode\` 的输出接到同名 \`SetNode\` 的上游（同名多个时取 \`order\` 小于它的最大者），找不到对应 \`SetNode\` 的消费端保持未连接；rgthree \`Mute / Bypass Relay\`/\`Repeater\` 的连线只传播静音/绕过状态、不传数据，直接丢弃（状态已保存在各节点的 \`mode\` 里）。
 - **DynamicCombo V3 保持扁平**：主输入的值是所选 option key 字符串，子控件以 \`主名.子名\` 平铺（如 \`codec: "auto"\`），不要包成 \`{ key, inputs }\`——服务端会自己重组，包起来反而匹配不上，节点在 execute 时报缺参数。
-- **子图（subgraph）实例不支持**：遇到请让用户在 ComfyUI 里把子图转换回普通节点后再提取。
+- **子图（subgraph）实例不支持**：遇到请让用户在 ComfyUI 里把子图转换回普通节点（右键 → \`Unpack\`）后再提取；若用户要脚本化处理，仓库自带 \`scripts/subgraph-to-api.mjs\`（子图内联摊平 + 画布图转 API），用法见 README「子图工作流」一节。
 - **未注册的 UI-only 节点**：若是 \`Primitive*\` 内联其第一个 widget 值；有输出被使用且非 Primitive → 报错。
 - **输出槽位越界**（保存图里 SaveImage 声称 2 个输出但服务端只有 1 个）→ 断开该引用并给警告。
 - **必需输入缺失**（required 里没有、且非 lazy/template 类型）→ 明确报错（源图本身断线），不产出"能转但跑不起来"的工作流。\`COMFY_AUTOGROW_V3\`/带 \`template\`/带 \`lazy\` 的输入豁免。

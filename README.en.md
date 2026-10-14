@@ -107,6 +107,31 @@ Just tell the agent, e.g.:
 
 For a remote ComfyUI behind an authenticated proxy, provide the key via credential storage or the `apiKeyEnv` env var (default `COMFYUI_API_KEY`) — it is resolved on the host and never sent to the browser.
 
+### Subgraph workflows (the canvas hid the body inside a subgraph)
+
+The newer ComfyUI canvas can fold a whole pipeline into a **subgraph**, leaving only one instance node whose type is the subgraph UUID. The panel **cannot extract** such a graph: the analyzer treats a subgraph as a black box and fails with `包含未注册的 UI-only 节点 "<uuid>"`. Two ways out:
+
+1. **Turn it back into plain nodes in ComfyUI**: right-click the subgraph → `Unpack`, save, then hit **Extract** in the panel.
+2. **Use the converter shipped in this repo** (offline, scriptable, no canvas work):
+
+```bash
+node scripts/subgraph-to-api.mjs <canvas-workflow.json> [out.json]
+# flags: --base-url <url>     ComfyUI address (default http://127.0.0.1:8188) to fetch object_info live
+#        --object-info <file> use a local object_info dump instead (offline)
+#        --quiet              don't print the converted workflow JSON
+```
+
+It (a) **flattens the subgraph inline** — the `-10` / `-20` virtual ports become real links — then (b) converts the canvas graph into API format per the `object_info` contract. The result can be stored straight into this plugin's workflow library via the `/comfyui/workflows` route.
+
+Conversion rules (all verified against real workflows — read these before editing the script):
+
+- A subgraph instance's `widgets_values` align with the **subgraph definition's slot order**, and only widget slots (STRING/INT/FLOAT/BOOLEAN/COMBO) take a cell — **a widget slot takes its cell even when it is wired externally**; miscount and everything shifts.
+- A node's `widgets_values` order == `object_info` required then optional (widget types only); `control_after_generate` adds a cell that is consumed and dropped; a `forceInput` widget takes no cell; a `COMFY_DYNAMICCOMBO_V3` master takes one cell and its sub-inputs are named `master.sub`.
+- Autogrow groups (`COMFY_AUTOGROW_V3`) **keep their group prefix** (`images.image0`); stripping it makes `/prompt` answer 400 `required_input_missing`.
+- Canvas-only frontend nodes (`MarkdownNote`, `ImageCompare`, …) are detected by whether `object_info` declares a frontend-only input type, and skipped.
+
+Self-test: `node scripts/test-subgraph-to-api.mjs` (pure offline fixtures, no ComfyUI needed).
+
 ## Configuration
 
 `comfyui` section of `cordis.yml` (most is editable in the settings page):
