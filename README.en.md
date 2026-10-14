@@ -93,6 +93,8 @@ dsh plugin --profile desktop add dsh-maid-comfyui
 
 After restarting the app: a panel entry appears in the sidebar, a "ComfyUI" section in settings, and the agent gets all tools plus the companion skill right away.
 
+> **No profile editing needed**: the installer (`dsh plugin add` / the plugin market) writes the dependency into `package.json`, adds this package to `dsh.profile.bundles`, and applies the bundle patch shipped in the package — the host's `dsh-plugin-manager` reconcile step adopts every newly installed dependency that declares `dsh.bundle`. Machine-specific values such as the local ComfyUI path belong in the **settings page** (saved values apply live, no restart), not in the profile's `cordis.patch.yml`.
+
 ## Usage
 
 Just tell the agent, e.g.:

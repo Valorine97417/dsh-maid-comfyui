@@ -91,7 +91,9 @@ dsh plugin --profile web add dsh-maid-comfyui
 dsh plugin --profile desktop add dsh-maid-comfyui
 ```
 
-重启应用后：侧边栏出现面板入口，设置页出现 "ComfyUI" 分区，Agent 立即获得全部工具与配套 skill。
+装完**重启应用即可**：侧边栏出现面板入口，设置页出现 "ComfyUI" 分区，Agent 立即获得全部工具与配套 skill。
+
+> **不用手改 profile**：安装器（`dsh plugin add` / 插件市场）会自己把依赖写进 `package.json`、把本包加进 `dsh.profile.bundles`，并应用包内的 bundle patch——宿主 `dsh-plugin-manager` 的 reconcile 步骤会收编每一个带 `dsh.bundle` 字段的新依赖。本机 ComfyUI 路径这类**机器特定值**走设置页（改完即生效，无需重启），不必写进 profile 的 `cordis.patch.yml`。
 
 ## 使用
 
