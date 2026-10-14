@@ -112,7 +112,7 @@ For a remote ComfyUI behind an authenticated proxy, provide the key via credenti
 The newer ComfyUI canvas can fold a whole pipeline into a **subgraph**, leaving only one instance node whose type is the subgraph UUID. The panel **cannot extract** such a graph: the analyzer treats a subgraph as a black box and fails with `包含未注册的 UI-only 节点 "<uuid>"`. Two ways out:
 
 1. **Turn it back into plain nodes in ComfyUI**: right-click the subgraph → `Unpack`, save, then hit **Extract** in the panel.
-2. **Use the converter shipped in this repo** (offline, scriptable, no canvas work):
+2. **Use the converter shipped in this repo** (offline, scriptable, no canvas work; the script travels with the **source repo**, not inside the npm package — clone to use it):
 
 ```bash
 node scripts/subgraph-to-api.mjs <canvas-workflow.json> [out.json]

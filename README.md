@@ -112,7 +112,7 @@ dsh plugin --profile desktop add dsh-maid-comfyui
 新版 ComfyUI 画布可以把一整段流程收进**子图**，存盘后顶层只剩一个 type 等于子图 UUID 的实例节点。这类图工作流**面板里提取不了**——分析器把子图当黑盒，会报「包含未注册的 UI-only 节点 "<uuid>"」。两条路：
 
 1. **在 ComfyUI 里转回普通节点**：右键子图 → `Unpack`（展开），保存后再到面板点**提取**。
-2. **用仓库自带的转换器**（离线、可脚本化，不用动画布）：
+2. **用仓库自带的转换器**（离线、可脚本化，不用动画布；脚本随**源码仓库**分发，不在 npm 包里，需 clone 后使用）：
 
 ```bash
 node scripts/subgraph-to-api.mjs <画布工作流.json> [输出.json]
