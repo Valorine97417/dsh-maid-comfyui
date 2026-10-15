@@ -143,7 +143,7 @@ function findOutputRef(assets: AssetRecord[], name: string): ComfyUIMediaRef | u
 
 function redact(runtime: ComfyUIRuntime, apiKey: string | undefined): Record<string, unknown> {
   const config = runtime.getConfig()
-  const idle = runtime.idleState()
+  const server = runtime.serverState()
   return {
     baseUrl: config.baseUrl,
     apiKeyEnv: config.apiKeyEnv,
@@ -160,13 +160,9 @@ function redact(runtime: ComfyUIRuntime, apiKey: string | undefined): Record<str
     // command configured, or a REMOTE server (starting a local ComfyUI would
     // not bring that one up).
     canLaunch: config.launchCommand.trim() !== '' && isLocalBaseUrl(config.baseUrl),
-    // Idle shutdown: the panel shows the window it will honour and whether a
-    // plugin-started server is currently armed for it.
-    idleShutdownMinutes: config.idleShutdownMinutes,
-    idleState: idle,
-    // A stop button only makes sense for something this plugin started on this
-    // machine — the same boundary the idle watchdog honours.
-    canShutdown: idle.armed,
+    // Whether a plugin-started server is currently running. The panel's power
+    // button reads this to decide which way it points.
+    serverState: server,
     skillsDir: config.skillsDir,
     // The path actually in use, so the page can show where packs land even
     // when skillsDir is empty (the `<dataDir>/skills` default).
@@ -243,14 +239,6 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
   ): ((request: IncomingMessage, response: ServerResponse) => void | Promise<void>) => {
     return (request, response) => {
       runtime.hostHint.record(request)
-      // Every browser call counts as use: the idle watchdog must not stop a
-      // server the user is actively driving from the panel. The two lifecycle
-      // routes are exempt — probing is what a *failed* launch does repeatedly,
-      // and stopping the server is not activity on it.
-      const path = request.url ?? ''
-      if (!path.startsWith('/comfyui/launch') && !path.startsWith('/comfyui/idle')) {
-        runtime.noteActivity()
-      }
       return handler(request, response)
     }
   }
@@ -378,7 +366,7 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
       }
       // Stopping the server is a side effect on the user's machine, so it stays
       // behind an explicit POST — never a GET the browser could prefetch. Only
-      // a server this plugin launched is a target (idleState.armed); anything
+      // a server this plugin launched is a target (serverState.armed); anything
       // the user started themselves answers not-launched-by-plugin.
       try {
         const result = await runtime.shutdownComfyUI()

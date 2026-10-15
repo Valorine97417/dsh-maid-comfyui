@@ -23,10 +23,6 @@ interface ConfigView {
   comfyuiDirs: string[]
   launchCommand: string
   launchDir: string
-  /** Backstop idle minutes after which a plugin-started ComfyUI is stopped; 0 disables both automatic stops. */
-  idleShutdownMinutes: number
-  idleState: { armed: boolean; port: number | null; idleMs: number; minutes: number }
-  canShutdown: boolean
   skillsDir: string
   /** The path packs actually use, including the `<dataDir>/skills` default. */
   skillsRoot: string
@@ -47,14 +43,11 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
   const [comfyuiDirs, setComfyuiDirs] = useState<string[]>([])
   const [launchCommand, setLaunchCommand] = useState('')
   const [launchDir, setLaunchDir] = useState('')
-  const [idleMinutes, setIdleMinutes] = useState('30')
   const [skillsDir, setSkillsDir] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle')
   const [testing, setTesting] = useState(false)
-  const [stopping, setStopping] = useState(false)
-  const [stopNote, setStopNote] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [lang, setLangState] = useState<Lang>(getLang())
 
@@ -69,7 +62,6 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
       setComfyuiDirs(Array.isArray(view.comfyuiDirs) ? view.comfyuiDirs : [])
       setLaunchCommand(view.launchCommand ?? '')
       setLaunchDir(view.launchDir ?? '')
-      setIdleMinutes(String(view.idleShutdownMinutes ?? 30))
       setSkillsDir(view.skillsDir ?? '')
     }).catch((error: unknown) => {
       if (cancelled) return
@@ -80,46 +72,12 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
     }
   }, [])
 
-  /** The idle field is free text; a blank or nonsense value keeps the default.
-   * The host schema clamps the rest (0 = never stop, 1440 = a day). */
-  const idleMinutesNumber = (): number => {
-    const parsed = Number(idleMinutes.trim())
-    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.round(parsed), 1_440) : 30
-  }
-
-  const idleStatusText = (): string => {
-    if (stopNote !== null) return stopNote
-    const minutes = idleMinutesNumber()
-    const state = config?.idleState
-    if (minutes === 0) return t('idleDisabled')
-    if (state === undefined || !state.armed) return t('idleNotLaunched')
-    return t('idleArmed', { minutes: String(Math.round(state.idleMs / 60_000)) })
-  }
-
-  /** Stop a server this plugin started, without waiting out the idle window. */
-  const stopNow = async (): Promise<void> => {
-    setStopping(true)
-    setStopNote(null)
-    try {
-      const result = (await postJson('/comfyui/idle/stop', {})) as { ok?: boolean; stopped?: boolean; error?: string }
-      if (result.ok === true && result.stopped === true) {
-        setStopNote(t('stopped'))
-      } else {
-        setStopNote(`${t('stopFailed')}${result.error !== undefined ? ` (${result.error})` : ''}`)
-      }
-    } catch (error) {
-      setStopNote(`${t('stopFailed')} (${error instanceof Error ? error.message : String(error)})`)
-    } finally {
-      setStopping(false)
-    }
-  }
-
   const save = async (): Promise<void> => {
     setSaving(true)
     setSaveState('idle')
     try {      // Trim blanks and drop empty rows before persisting.
       const dirs = comfyuiDirs.map((dir) => dir.trim()).filter((dir) => dir !== '')
-      const payload = (await postJson('/comfyui/config', { patch: { baseUrl, apiKeyEnv, mediaHost, comfyuiDirs: dirs, launchCommand: launchCommand.trim(), launchDir: launchDir.trim(), idleShutdownMinutes: idleMinutesNumber(), skillsDir: skillsDir.trim() } })) as { config?: ConfigView }
+      const payload = (await postJson('/comfyui/config', { patch: { baseUrl, apiKeyEnv, mediaHost, comfyuiDirs: dirs, launchCommand: launchCommand.trim(), launchDir: launchDir.trim(), skillsDir: skillsDir.trim() } })) as { config?: ConfigView }
       if (payload.config !== undefined) {
         setConfig(payload.config)
         setBaseUrl(payload.config.baseUrl)
@@ -128,7 +86,6 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
         setComfyuiDirs(payload.config.comfyuiDirs ?? [])
         setLaunchCommand(payload.config.launchCommand ?? '')
         setLaunchDir(payload.config.launchDir ?? '')
-        setIdleMinutes(String(payload.config.idleShutdownMinutes ?? idleMinutesNumber()))
         setSkillsDir(payload.config.skillsDir ?? '')
       }
       setSaveState('saved')
@@ -214,24 +171,11 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
       }),
       h('div', { className: 'dsc-hint' }, t('launchDirHint')),
     ),
+    // Starting and stopping is the panel header's power button now; there is no
+    // idle timer to configure, so the page only states the rule.
     h('div', { className: 'dsc-field' },
-      h('label', null, t('idleShutdownMinutes')),
-      h('input', {
-        className: 'dsc-input',
-        value: idleMinutes,
-        placeholder: '30',
-        inputMode: 'numeric',
-        onChange: (event: { target: { value: string } }) => { setIdleMinutes(event.target.value); setSaveState('idle') },
-      }),
-      h('div', { className: 'dsc-hint' }, t('idleShutdownMinutesHint')),
-      h('div', { className: 'dsc-hint' }, idleStatusText()),
-      config.canShutdown
-        ? h('button', {
-          className: 'dsc-btn',
-          disabled: stopping,
-          onClick: () => void stopNow(),
-        }, stopping ? t('stopping') : t('stopNow'))
-        : null,
+      h('label', null, t('serverLifecycle')),
+      h('div', { className: 'dsc-hint' }, t('serverLifecycleHint')),
     ),
     h('div', { className: 'dsc-field' },
       h('label', null, t('apiKeyEnv')),

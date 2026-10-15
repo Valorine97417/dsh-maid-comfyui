@@ -89,6 +89,12 @@ export interface ComfyUIPanelProps {
   t: (key: string, ...rest: unknown[]) => string
 }
 
+/** The slice of GET /comfyui/config the header's power button needs. */
+interface ServerView {
+  canLaunch?: boolean
+  serverState?: { armed?: boolean; port?: number | null }
+}
+
 interface MediaItem {
   filename: string
   subfolder: string
@@ -1082,15 +1088,14 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
   const [geom, setGeom] = useState<PanelGeom>(() => healGeom(loadGeom(), window.innerWidth, window.innerHeight))
   const [dragging, setDragging] = useState<'move' | 'resize' | null>(null)
   const [lightbox, setLightbox] = useState<{ images: string[]; kinds: Array<'image' | 'video' | 'audio' | 'other'>; index: number } | null>(null)
-  // Stopping ComfyUI is a host-side side effect, so the header only offers it
-  // when the host reports an armed, plugin-launched server — the same boundary
-  // the idle watchdog honours, since a ComfyUI the user started by hand is
-  // never a target. `null` = not asked yet (or unreadable): the button stays
-  // disabled rather than offering a stop the host would refuse.
-  const [canShutdown, setCanShutdown] = useState<boolean | null>(null)
+  // The header's power button drives both directions: it starts a local
+  // ComfyUI that is down, and stops the one this plugin started. `null` = the
+  // host has not answered yet — a click then asks rather than guessing.
+  const [serverArmed, setServerArmed] = useState<boolean | null>(null)
+  const [canLaunch, setCanLaunch] = useState<boolean | null>(null)
+  const [powerBusy, setPowerBusy] = useState(false)
   const [stopAsk, setStopAsk] = useState(false)
-  const [stopBusy, setStopBusy] = useState(false)
-  const [stopNote, setStopNote] = useState<string | null>(null)
+  const [powerNote, setPowerNote] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; width: number; height: number } | null>(null)
 
@@ -1117,7 +1122,7 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
     return () => window.removeEventListener('resize', onResize)
   }, [open])
 
-  // Opening the panel re-reads the shutdown verdict: whether a plugin-launched
+  // Opening the panel re-reads the server verdict: whether a plugin-launched
   // server is armed changes with every launch, turn end and manual stop, so a
   // once-per-page cache (as the launcher button uses) would go stale the moment
   // the first run finishes.
@@ -1128,11 +1133,13 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
       try {
         // GET /comfyui/config answers the redacted config itself — no `config`
         // wrapper (only the POST reply wraps it).
-        const payload = (await getJson('/comfyui/config')) as { canShutdown?: boolean }
-        if (!cancelled) setCanShutdown(payload.canShutdown === true)
+        const payload = (await getJson('/comfyui/config')) as ServerView
+        if (cancelled) return
+        setServerArmed(payload.serverState?.armed === true)
+        setCanLaunch(payload.canLaunch === true)
       } catch {
-        // An unreadable config is not a "yes"; leave the button disabled.
-        if (!cancelled) setCanShutdown(false)
+        // An unreadable config is not a verdict; leave both unknown so a click
+        // asks again instead of acting on a guess.
       }
     })()
     return () => {
@@ -1187,48 +1194,83 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
     })
   }
 
-  /** Stop the plugin-launched ComfyUI now: no waiting for the turn end or the
-   * idle backstop. The route answers `not-launched-by-plugin` for a server the
-   * user started themselves — that refusal is the feature, not a bug. */
+  /** Read the host's verdict on the server: armed (ours to stop) and whether a
+   * launch command is configured at all. `null` = the host did not answer. */
+  const readServerState = async (): Promise<{ armed: boolean; canLaunch: boolean } | null> => {
+    try {
+      const payload = (await getJson('/comfyui/config')) as ServerView
+      const armed = payload.serverState?.armed === true
+      const launchable = payload.canLaunch === true
+      setServerArmed(armed)
+      setCanLaunch(launchable)
+      return { armed, canLaunch: launchable }
+    } catch {
+      // Unreadable config is not a verdict; let the route give the real answer.
+      return null
+    }
+  }
+
+  /** Start the local ComfyUI through the configured launch command. */
+  const startComfy = async (): Promise<void> => {
+    setPowerBusy(true)
+    setPowerNote(null)
+    try {
+      const result = (await postJson('/comfyui/launch', {})) as { ok?: boolean; started?: boolean; error?: string }
+      if (result.ok === true) {
+        // A server that was already up is not necessarily ours, but the panel
+        // only got here after asking, so trust the host's next verdict.
+        setPowerNote(result.started === true ? t('powerStarted') : t('powerAlready'))
+        await readServerState()
+      } else {
+        setPowerNote(`${t('powerStartFailed')}${result.error !== undefined ? ` (${result.error})` : ''}`)
+      }
+    } catch (error) {
+      setPowerNote(`${t('powerStartFailed')} (${error instanceof Error ? error.message : String(error)})`)
+    } finally {
+      setPowerBusy(false)
+    }
+  }
+
+  /** Stop the plugin-launched ComfyUI now. The route answers
+   * `not-launched-by-plugin` for a server the user started themselves — that
+   * refusal is the feature, not a bug. */
   const stopComfy = async (): Promise<void> => {
-    setStopBusy(true)
+    setPowerBusy(true)
     try {
       const result = (await postJson('/comfyui/idle/stop', {})) as { ok?: boolean; stopped?: boolean; error?: string }
       if (result.ok === true) {
         // `stopped: false` means nothing was listening any more — the server is
         // down either way, so the same feedback is honest.
-        setStopNote(t('stopped'))
-        setCanShutdown(false)
+        setPowerNote(t('stopped'))
+        setServerArmed(false)
       } else {
-        setStopNote(`${t('stopFailed')}${result.error !== undefined ? ` (${result.error})` : ''}`)
+        setPowerNote(`${t('stopFailed')}${result.error !== undefined ? ` (${result.error})` : ''}`)
       }
     } catch (error) {
-      setStopNote(`${t('stopFailed')} (${error instanceof Error ? error.message : String(error)})`)
+      setPowerNote(`${t('stopFailed')} (${error instanceof Error ? error.message : String(error)})`)
     } finally {
-      setStopBusy(false)
+      setPowerBusy(false)
       setStopAsk(false)
     }
   }
 
-  /** Re-check the verdict, then confirm. The button is never disabled: a run
-   * that happened since the panel opened may have launched a new server, so the
-   * click is the moment to ask rather than trusting a value read earlier. */
-  const askStop = async (): Promise<void> => {
-    setStopNote(null)
-    let armed = canShutdown === true
-    try {
-      const payload = (await getJson('/comfyui/config')) as { canShutdown?: boolean }
-      armed = payload.canShutdown === true
-      setCanShutdown(armed)
-    } catch {
-      // Unreadable config is not a verdict; fall back to the last known one and
-      // let the stop route give the real answer.
-    }
-    if (!armed) {
-      setStopNote(t('idleNotLaunched'))
+  /** One button, two directions. The click re-asks the host instead of trusting
+   * a value read when the panel opened: a run since then may have launched a
+   * server (stop), or the turn end may have stopped it (start). */
+  const pressPower = async (): Promise<void> => {
+    setPowerNote(null)
+    const state = await readServerState()
+    const armed = state === null ? serverArmed === true : state.armed
+    if (armed) {
+      setStopAsk(true)
       return
     }
-    setStopAsk(true)
+    const launchable = state === null ? canLaunch !== false : state.canLaunch
+    if (!launchable) {
+      setPowerNote(t('powerNoLauncher'))
+      return
+    }
+    await startComfy()
   }
 
   if (!open) return null
@@ -1258,11 +1300,12 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
       ),
       h('span', { className: 'dsc-panel-head-actions' },
         h('button', {
-          className: canShutdown === true ? 'dsc-panel-stop' : 'dsc-panel-stop dsc-panel-stop--idle',
+          className: serverArmed === true ? 'dsc-panel-power dsc-panel-power--on' : 'dsc-panel-power',
           type: 'button',
-          title: t('stopComfy'),
-          'aria-label': t('stopComfy'),
-          onClick: () => void askStop(),
+          disabled: powerBusy,
+          title: serverArmed === true ? t('stopComfy') : t('startComfy'),
+          'aria-label': serverArmed === true ? t('stopComfy') : t('startComfy'),
+          onClick: () => void pressPower(),
         }, '⏻'),
         h('button', {
           className: 'dsc-panel-reset',
@@ -1287,7 +1330,7 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
         }, '✕'),
       ),
     ),
-    stopNote !== null ? h('div', { className: 'dsc-panel-note' }, stopNote) : null,
+    powerNote !== null ? h('div', { className: 'dsc-panel-note' }, powerNote) : null,
     h('div', { className: 'dsc-tabs' },
       h(TabButton, { t, active: tab === 'workflows', label: t('tabWorkflows'), onClick: () => panelStore.setTab('workflows') }),
       h(TabButton, { t, active: tab === 'assets', label: t('tabAssets'), onClick: () => panelStore.setTab('assets') }),
@@ -1314,8 +1357,8 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
           t,
           title: t('stopComfyTitle'),
           body: t('stopComfyBody'),
-          busy: stopBusy,
-          confirmLabel: stopBusy ? t('stopping') : t('stopNow'),
+          busy: powerBusy,
+          confirmLabel: powerBusy ? t('stopping') : t('stopNow'),
           onConfirm: () => { void stopComfy() },
           onCancel: () => setStopAsk(false),
         })

@@ -161,9 +161,9 @@ async function runLaunch(explicit = false): Promise<void> {
  * healthy repeated panel opens do not hammer the server; failures always
  * re-probe on the next open (the user may have just started ComfyUI).
  *
- * When the probe fails and a launcher is configured, this starts ComfyUI
- * itself: opening the panel is the user's request to use ComfyUI, and making
- * them find a second button first is what the old version did badly.
+ * When the probe fails and a launcher is configured, the toast offers a start
+ * button. It deliberately does not press it: opening the panel must not start a
+ * multi-GB process by itself.
  */
 export function probeConnection(): Promise<void> {
   if (inFlight !== null) return inFlight
@@ -193,11 +193,11 @@ export function probeConnection(): Promise<void> {
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error)
     }
-    if (await canLaunch()) {
-      await runLaunch()
-    } else {
-      settleFail(failure, false)
-    }
+    // Opening the panel never starts ComfyUI: bringing up a multi-GB process is
+    // a decision, not a side effect of looking at a panel. The toast carries the
+    // button (and the panel header has its own power button), so a down server
+    // is reported rather than silently launched.
+    settleFail(failure, await canLaunch())
   })().finally(() => {
     inFlight = null
   })

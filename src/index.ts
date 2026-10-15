@@ -189,10 +189,12 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     },
   })
 
-  // Idle shutdown: a launched ComfyUI holds VRAM until something stops it, and
-  // the user pays for that in every other GPU workload. Only an instance this
-  // plugin started is a target; the marker file carries that fact across host
-  // restarts, since the server outlives the plugin's fiber.
+  // Shutdown ownership: a launched ComfyUI holds VRAM until something stops it,
+  // and the user pays for that in every other GPU workload. Only an instance
+  // this plugin started is a target; the marker file carries that fact across
+  // host restarts, since the server outlives the plugin's fiber. There is no
+  // idle timer — the server is stopped when the work is over (the end of a
+  // turn, or the panel's power button), never merely for being quiet.
   const busy = async (): Promise<boolean> => {
     const client = new ComfyUIClient(resolved.baseUrl, await resolveApiKey(ctx, resolved.apiKeyEnv), resolved.connectTimeoutMs, resolved.maxMediaBytes)
     const view = await client.getQueue()
@@ -200,7 +202,6 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     return tracker.list().length > 0
   }
   const idle = createIdleShutdown({
-    minutes: () => resolved.idleShutdownMinutes,
     busy,
     findPids: findListeningPids,
     kill: killProcessTree,
@@ -211,14 +212,14 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
   })
   ctx.effect(() => () => {
     idle.dispose()
-  }, 'dsh-maid-comfyui: idle shutdown')
+  }, 'dsh-maid-comfyui: server shutdown')
 
-  // The end of a conversation turn is the primary shutdown trigger: a
-  // generation is the reason the server is up, and once the turn that asked
-  // for it is over, nobody is waiting for the VRAM any more. The idle window
-  // stays as a backstop for whatever never reaches a turn boundary. Reason
-  // kinds that are not a real end of work ('forked' seeds a copy, 'interrupted'
-  // is a crash orphan written during recovery) leave the server alone.
+  // The end of a conversation turn is the shutdown trigger: a generation is the
+  // reason the server is up, and once the turn that asked for it is over,
+  // nobody is waiting for the VRAM any more. Reason kinds that are not a real
+  // end of work ('forked' seeds a copy, 'interrupted' is a crash orphan written
+  // during recovery) leave the server alone. A run that outlives its turn
+  // defers the request until the queue drains rather than dropping it.
   ctx.on('session/event' as never, ((_session: unknown, event: { type?: string; data?: { reason?: { kind?: string } } }) => {
     if (event.type !== 'turn/end') return
     const kind = event.data?.reason?.kind
@@ -234,7 +235,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
    * `launchCommand` both mean "not ours to start", so those fall through to
    * the client, which reports the real error.
    *
-   * Only a launch that actually spawned the process arms the idle watchdog: a
+   * Only a launch that actually spawned the process arms the shutdown owner: a
    * server that was already answering is not necessarily ours (the user may
    * have started it by hand), and a ComfyUI this plugin did not start must
    * never be stopped by it.
@@ -312,10 +313,6 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
         extraData['extra_pnginfo'] = { workflow: { id: meta.workflowId, name: meta.workflowName } }
       }
       const promptId = await client.queuePrompt(prompt, { extraData })
-      // Agent-driven runs never touch the browser routes, so the idle clock
-      // gets its tick here too: a generation is use, and the window should
-      // count from the end of the work, not from the last panel click.
-      idle.noteActivity()
       tracker.track({ promptId, ts: new Date().toISOString(), workflowName: meta.workflowName, source: meta.source })
       return promptId
     },
@@ -452,8 +449,8 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     },
     launchComfyUI: async () => {
       const outcome = await launcher.launch()
-      // Only a server this plugin actually started may later be stopped by the
-      // idle watchdog, and only a loopback one (a remote ComfyUI is not ours).
+      // Only a server this plugin actually started may later be stopped, and
+      // only a loopback one (a remote ComfyUI is not ours).
       if (outcome.ok) {
         const port = localPortOf(resolved.baseUrl)
         if (port !== undefined) idle.markLaunched(port)
@@ -474,10 +471,7 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       ctx.logger.info(`comfyui: stopped on request (port ${String(port)}, pid ${pids.join(',')})`)
       return { ok: true, stopped: true }
     },
-    idleState: () => idle.snapshot(),
-    noteActivity: () => {
-      idle.noteActivity()
-    },
+    serverState: () => idle.snapshot(),
   }
 
   // The settings section rides the plugin fiber: a host without a settings

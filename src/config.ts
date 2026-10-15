@@ -56,13 +56,6 @@ export const Config = z.object({
   launchCommand: z.string().default('').volatile(),
   /** Working directory for `launchCommand`; empty = the host process cwd. */
   launchDir: z.string().default('').volatile(),
-  /** Backstop idle minutes: the plugin shuts down the ComfyUI **it started
-   * itself** this long after the last use. The primary trigger is the end of a
-   * conversation turn, which stops it immediately; this window only catches
-   * what never reaches a turn boundary (a host crash, a vanished client). 0
-   * disables both automatic stops; an instance the user started outside the
-   * plugin is never touched. */
-  idleShutdownMinutes: z.number().min(0).max(1_440).default(30).volatile(),
 })
 
 export type Config = {
@@ -96,8 +89,6 @@ export type Config = {
   launchCommand: string
   /** Working directory for `launchCommand`; empty = the host process cwd. */
   launchDir: string
-  /** Backstop idle minutes after which a plugin-started ComfyUI is shut down; 0 disables. */
-  idleShutdownMinutes: number
 }
 
 /** The volatile-reference protocol shared across cosmokit copies (Symbol.for). */
@@ -142,6 +133,5 @@ export function resolveConfig(raw: Partial<Record<keyof Config, unknown>>, defau
       : [],
     launchCommand: str(current(raw.launchCommand), ''),
     launchDir: str(current(raw.launchDir), ''),
-    idleShutdownMinutes: num(current(raw.idleShutdownMinutes), 30),
   }
 }

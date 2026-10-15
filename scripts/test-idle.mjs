@@ -1,11 +1,12 @@
 /**
- * Offline checks for the idle shutdown (src/idle.ts). Run after `npm run build`:
+ * Offline checks for the server shutdown (src/idle.ts). Run after `npm run build`:
  *   node scripts/test-idle.mjs
  *
  * Nothing here touches a real ComfyUI or a real process: `findPids` and `kill`
- * are injected, and the clock is driven by passing an explicit `now` to check().
- * The point is the boundary the feature promises — only a plugin-launched
- * server, only when nothing is in flight, only after the idle window.
+ * are injected. The point is the boundary the feature promises — only a server
+ * this plugin launched, only when nothing is in flight, and only on an explicit
+ * request (the end of a turn, or the panel's power button). There is no idle
+ * timer, so no check fires merely because time passed.
  */
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -20,18 +21,16 @@ function check(name, fn) {
   console.log(`ok ${passed} — ${name}`)
 }
 
-/** A deps object whose clock and probes the test fully controls. */
+/** A deps object whose probes the test fully controls. */
 function makeDeps(overrides = {}) {
   const killed = []
   const state = {
-    minutes: 10,
     busyValue: false,
     pids: [4242],
     killed,
     logs: [],
   }
   const deps = {
-    minutes: () => state.minutes,
     busy: async () => state.busyValue,
     findPids: async () => state.pids,
     kill: async (pids) => {
@@ -71,114 +70,108 @@ check('launchMarkerPath needs an absolute data dir', () => {
   assert.ok(launchMarkerPath('C:\\data\\dsh').endsWith('launched.json'))
 })
 
-// --- the watchdog ---------------------------------------------------------
+// --- no timer: time alone never stops anything ----------------------------
 
 check('a server this plugin never started is never stopped', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   try {
-    const result = await idle.check(Date.now() + 60 * 60_000)
-    assert.equal(result, 'skipped')
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    assert.equal(await idle.check(), 'skipped')
     assert.equal(state.killed.length, 0)
   } finally {
     idle.dispose()
   }
 })
 
-check('inside the idle window nothing happens', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    idle.markLaunched(8188)
-    const result = await idle.check(Date.now() + 5 * 60_000)
-    assert.equal(result, 'skipped')
-    assert.equal(state.killed.length, 0)
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('work in flight defers the shutdown and restarts the clock', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    idle.markLaunched(8188)
-    state.busyValue = true
-    const late = Date.now() + 30 * 60_000
-    assert.equal(await idle.check(late), 'skipped')
-    assert.equal(state.killed.length, 0)
-    // The clock moved to `late`, so a check one minute later is still inside.
-    assert.equal(await idle.check(late + 60_000), 'skipped')
-    assert.equal(state.killed.length, 0)
-    // A full window after the busy check, with nothing queued, stops it.
-    state.busyValue = false
-    assert.equal(await idle.check(late + 11 * 60_000), 'idle')
-    assert.deepEqual(state.killed, [4242])
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('an idle plugin-started server is stopped and disarmed', async () => {
+check('an armed server is left alone until someone asks', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   try {
     idle.markLaunched(8188)
     assert.equal(idle.snapshot().armed, true)
-    assert.equal(await idle.check(Date.now() + 11 * 60_000), 'idle')
+    // The old idle timer would have stopped it here; nothing may happen now.
+    assert.equal(await idle.check(), 'skipped')
+    assert.equal(state.killed.length, 0)
+    assert.equal(idle.snapshot().armed, true)
+  } finally {
+    idle.dispose()
+  }
+})
+
+// --- the explicit request (shutdownNow) -----------------------------------
+
+check('shutdownNow stops a plugin-started server', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    idle.markLaunched(8188)
+    assert.equal(await idle.shutdownNow('turn-end'), 'stopped')
     assert.deepEqual(state.killed, [4242])
     assert.equal(idle.snapshot().armed, false)
-    // Disarmed means a second window does not try to kill a pid that may since
-    // have been handed to someone else.
+    // Disarmed: a second request does not kill a pid that may since have been
+    // handed to someone else.
     state.killed.length = 0
-    assert.equal(await idle.check(Date.now() + 60 * 60_000), 'skipped')
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
     assert.equal(state.killed.length, 0)
   } finally {
     idle.dispose()
   }
 })
 
-check('noteActivity postpones the shutdown', async () => {
+check('shutdownNow during work in flight waits for the queue to drain', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   try {
     idle.markLaunched(8188)
-    idle.noteActivity()
-    assert.equal(await idle.check(Date.now() + 5 * 60_000), 'skipped')
+    state.busyValue = true
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
     assert.equal(state.killed.length, 0)
+    assert.equal(idle.snapshot().armed, true)
+    // The request stays pending: the next tick, once the queue is empty, stops
+    // it without anyone asking again.
+    state.busyValue = false
+    assert.equal(await idle.check(), 'stopped')
+    assert.deepEqual(state.killed, [4242])
   } finally {
     idle.dispose()
   }
 })
 
-check('minutes = 0 disables the shutdown', async () => {
+check('a deferred request stops retrying once it has been served', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   try {
-    state.minutes = 0
     idle.markLaunched(8188)
-    assert.equal(await idle.check(Date.now() + 24 * 60 * 60_000), 'skipped')
-    assert.equal(state.killed.length, 0)
+    state.busyValue = true
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    state.busyValue = false
+    assert.equal(await idle.check(), 'stopped')
+    assert.equal(await idle.check(), 'skipped')
+    assert.deepEqual(state.killed, [4242])
   } finally {
     idle.dispose()
   }
 })
 
-check('nothing listening on the port disarms instead of killing a stranger', async () => {
+check('shutdownNow on a port that is not listening yet stays armed', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   try {
     state.pids = []
     idle.markLaunched(8188)
-    assert.equal(await idle.check(Date.now() + 11 * 60_000), 'skipped')
+    // A launch may not have bound its port yet, and this request is not
+    // evidence of anything: the panel's power button must still be able to stop
+    // the server a moment later.
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
     assert.equal(state.killed.length, 0)
-    assert.equal(idle.snapshot().armed, false)
+    assert.equal(idle.snapshot().armed, true)
   } finally {
     idle.dispose()
   }
 })
 
-check('a kill failure leaves the watchdog armed for the next tick', async () => {
+check('a kill failure leaves the shutdown armed for the next request', async () => {
   const { deps } = makeDeps({
     kill: async () => {
       throw new Error('taskkill exploded')
@@ -187,12 +180,30 @@ check('a kill failure leaves the watchdog armed for the next tick', async () => 
   const idle = createIdleShutdown(deps)
   try {
     idle.markLaunched(8188)
-    assert.equal(await idle.check(Date.now() + 11 * 60_000), 'skipped')
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
     assert.equal(idle.snapshot().armed, true)
   } finally {
     idle.dispose()
   }
 })
+
+check('clearLaunched drops both the arm and a pending request', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    idle.markLaunched(8188)
+    state.busyValue = true
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    idle.clearLaunched()
+    state.busyValue = false
+    assert.equal(await idle.check(), 'skipped')
+    assert.equal(state.killed.length, 0)
+  } finally {
+    idle.dispose()
+  }
+})
+
+// --- the launch marker ----------------------------------------------------
 
 check('the launch marker survives a host restart', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-idle-'))
@@ -215,90 +226,14 @@ check('the launch marker survives a host restart', async () => {
   }
 })
 
-// --- the turn-end trigger (shutdownNow) -----------------------------------
-
-check('shutdownNow stops a plugin-started server without waiting for the window', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    idle.markLaunched(8188)
-    // Right after arming: the idle window would never fire this early.
-    assert.equal(await idle.check(Date.now()), 'skipped')
-    assert.equal(await idle.shutdownNow('turn-end'), 'idle')
-    assert.deepEqual(state.killed, [4242])
-    assert.equal(idle.snapshot().armed, false)
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('shutdownNow during work in flight waits for the queue to drain', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    idle.markLaunched(8188)
-    state.busyValue = true
-    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
-    assert.equal(state.killed.length, 0)
-    assert.equal(idle.snapshot().armed, true)
-    // The request stays pending: the next tick, once the queue is empty, stops
-    // it even though no idle window has passed.
-    state.busyValue = false
-    assert.equal(await idle.check(Date.now()), 'idle')
-    assert.deepEqual(state.killed, [4242])
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('shutdownNow on a port that is not listening yet stays armed', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    state.pids = []
-    idle.markLaunched(8188)
-    // Unlike the idle path, this must not disarm: a launch may not have bound
-    // the port yet, and the turn-end request is not evidence of anything.
-    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
-    assert.equal(state.killed.length, 0)
-    assert.equal(idle.snapshot().armed, true)
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('shutdownNow never touches a server this plugin did not start', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
-    assert.equal(state.killed.length, 0)
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('minutes = 0 disables the turn-end shutdown too', async () => {
-  const { deps, state } = makeDeps()
-  const idle = createIdleShutdown(deps)
-  try {
-    state.minutes = 0
-    idle.markLaunched(8188)
-    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
-    assert.equal(state.killed.length, 0)
-    assert.equal(idle.snapshot().armed, true)
-  } finally {
-    idle.dispose()
-  }
-})
-
-check('dispose stops the clock and the shutdown', async () => {
+check('dispose stops the shutdown', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)
   idle.markLaunched(8188)
   idle.dispose()
-  assert.equal(await idle.check(Date.now() + 60 * 60_000), 'skipped')
+  assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+  assert.equal(await idle.check(), 'skipped')
   assert.equal(state.killed.length, 0)
 })
 
-console.log(`\n${String(passed)} idle-shutdown checks passed`)
+console.log(`\n${String(passed)} shutdown checks passed`)

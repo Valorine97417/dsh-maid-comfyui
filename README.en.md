@@ -50,7 +50,9 @@ Clicking the "ComfyUI Panel" button in the session header probes the backend's c
 
 > For a launch with no console window at all, use the portable build's `python_embeded\pythonw.exe` instead of its `run_nvidia_gpu.bat`: that batch file ends in `pause`, and the console window `cmd` opens for it stays up.
 
-The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done, returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. If the end of the turn never arrives (host crash, vanished client), the idle backstop `idleShutdownMinutes` (30 by default) catches it; set that field to `0` to disable both automatic stops. To stop it right now: the `⏻` button in the panel's top-right corner (the window the "ComfyUI Panel" header button opens), or "Stop now" next to that setting — same action, and both only ever touch the one this plugin started.
+The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done (the turn ends), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. **There is no idle timer** — the plugin never stops a server merely for being quiet. To start or stop it by hand: the `⏻` button in the panel's top-right corner (the window the "ComfyUI Panel" header button opens) — it starts the server when it is down, and stops the one this plugin started (with a confirmation first); a ComfyUI you started yourself is never a target.
+
+**Opening the panel never starts ComfyUI** (earlier versions did; that is gone). A failed probe only shows the toast, whose "Start local ComfyUI" button does the launching.
 
 Stopped also means startable again: when `launchCommand` is configured, the agent probes before a run and starts ComfyUI with your command if it is down — no button press needed. A server that is already answering (one you started yourself, for instance) is not launched again and is not adopted by the plugin.
 
@@ -146,7 +148,6 @@ Self-test: `node scripts/test-subgraph-to-api.mjs` (pure offline fixtures, no Co
 | `comfyuiDirs` | `[]` | Local ComfyUI install dirs (multiple allowed); the agent locates models, custom nodes, TTS voice libraries through these |
 | `launchCommand` | `''` | Command the panel's "Start local ComfyUI" button runs. Empty = no button |
 | `launchDir` | `''` | Working directory for the launch command (the portable root for a portable build). Empty = the plugin's runtime dir |
-| `idleShutdownMinutes` | `30` | Idle backstop for a ComfyUI **this plugin started** when the end of a turn never arrives (host crash, vanished client). `0` disables both automatic stops |
 | `outputDir` | `''` (inferred) | ComfyUI output dir (used to locate files when deleting assets) |
 | `mediaHost` | `''` (auto) | External base URL for generated media |
 | `skillsDir` | `''` (default `dataDir/skills`) | Skill pack root (absolute path; a synced folder or VCS works) |
