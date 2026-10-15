@@ -153,6 +153,7 @@ Agent ──tools──┐
 14. **删工作流不默认删技能包**：技能包是用户手写的文档，没有别的副本。`workflows/delete` 只在 body 显式带 `deleteSkill: true` 时销毁目录，面板在有技能包时会先问"一起删/只删工作流"。停用（`disable`）同理，只清 `skillDir` 字段、留着目录。
 
 15. **DynamicCombo V3 在 API prompt 里是扁平的**：主输入的值 = 选中项的 key 字符串，子控件以 `master.sub` 为同级键（如 `codec: "auto"`、`aspect_ratio.size`）。服务端自己重组嵌套结构；包成 `{ key, inputs }` 会匹配不上、输入被丢弃，节点在 `execute()` 才报 `missing ... 'codec'`（#10，视频要白跑整轮才发现）。`params.ts` 的 combo 子参数也按扁平键工作。
+16. **插件浮层必须自己声明 `-webkit-app-region: no-drag`，顶部浮层用 `var(--dsh-frame-overlay-top)` 定位**：宿主 Windows Electron 的外框有一条 caption 高度的伪元素（`.BynINW_frame:before`）铺着 `-webkit-app-region: drag`，而宿主只在 macOS 分支给 `button/a/input/…` 隐式 `no-drag`，Windows 下没有。后果实测（2026-10-15 老大报障）：连接提醒条写死 `top: 14px` 正好落在标题栏条带里，**整条 toast 上的点击——包括右上角关闭 ✕——全被当成拖窗口吞掉，弹窗关不掉**。规矩：① 所有插件浮层（`.dsc-conn-toast` / `.dsc-panel` / `.dsc-picker-overlay` / `.dsc-lightbox`）显式写 `-webkit-app-region: no-drag`，toast 再补 `.dsc-conn-toast *` 覆盖子元素；② 顶部定位用 `top: var(--dsh-frame-overlay-top, 14px)`（宿主给 darwin 与 Windows 标题栏都预留了这个偏移），不要写死像素。
 
 ## 代码风格约定
 

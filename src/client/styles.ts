@@ -65,10 +65,22 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
 /* --- connection reminder toast: fixed at the top of the page, mounted by the
    header trigger when the backend probe cannot reach ComfyUI. The probing
    state fades in after a short delay so a fast successful probe never paints;
-   the fail state is sticky until dismissed or a later probe recovers. --- */
+   the fail state is sticky until dismissed or a later probe recovers.
+
+   Two host facts decide its geometry and its pointer behaviour:
+   - On Windows Electron the frame paints a caption-height strip with
+     -webkit-app-region: drag (the .BynINW_frame:before rule in the app shell).
+     The host only gives buttons an implicit no-drag on the macOS branch, so a
+     fixed toast parked at 14px sat inside that strip and every click on it —
+     including the close button — was swallowed as a window drag. The toast
+     therefore declares no-drag itself and sits below the caption, using the
+     host's own overlay offset instead of a hardcoded top.
+   - --dsh-frame-overlay-top is the offset the host reserves for overlays on
+     both darwin and the Windows titlebar; the fallback covers other shells. --- */
 .dsc-conn-toast {
-  position: fixed; top: 14px; left: 50%;
+  position: fixed; top: var(--dsh-frame-overlay-top, 14px); left: 50%;
   z-index: 980;
+  -webkit-app-region: no-drag;
   display: flex; align-items: flex-start; gap: 10px;
   max-width: min(560px, 92vw);
   padding: 10px 12px;
@@ -93,6 +105,9 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
 .dsc-conn-toast--ok .dsc-conn-toast-title { color: var(--dsw-alias-state-success-primary); }
 .dsc-conn-toast-text { color: var(--dsw-alias-label-secondary); margin-top: 2px; overflow-wrap: anywhere; }
 .dsc-conn-toast-close { flex: none; border: none; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font-size: 13px; padding: 2px 4px; line-height: 1; }
+/* The host makes its caption strip draggable and only exempts controls on the
+   macOS branch, so the toast punches its own hole (and for its children) here. */
+.dsc-conn-toast, .dsc-conn-toast * { -webkit-app-region: no-drag; }
 .dsc-conn-toast-close:hover { color: var(--dsw-alias-label-primary); }
 @keyframes dsc-conn-toast-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes dsc-conn-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -107,6 +122,9 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
   width: var(--dsc-panel-width, 400px);
   max-width: min(92vw, 560px); min-width: 300px;
   z-index: 900;
+  /* The host's Windows caption strip is draggable; a plugin window parked near
+     the top must not hand its own clicks to the window manager. */
+  -webkit-app-region: no-drag;
   display: flex; flex-direction: column;
   /* Fork customization: the panel surface is forced solid. The host token
      (--dsw-alias-bg-layer-1) is 90% opaque in the maid-atelier theme, so the
@@ -329,7 +347,7 @@ video.dsc-picker-player { max-height: 180px; }
 .dsc-loadslot-x:disabled { opacity: 0; cursor: default; }
 .dsc-picker-card--none .dsc-picker-thumb--media { font-size: 26px; color: var(--dsw-alias-label-tertiary); }
 /* picker overlay: dims the page, dialog floats in the center */
-.dsc-picker-overlay { position: fixed; inset: 0; z-index: 9990; background: rgba(6, 8, 12, 0.6); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.dsc-picker-overlay { position: fixed; inset: 0; z-index: 9990; background: rgba(6, 8, 12, 0.6); display: flex; align-items: center; justify-content: center; padding: 24px; -webkit-app-region: no-drag; }
 .dsc-picker { position: relative; display: flex; flex-direction: column; width: min(860px, 92vw); height: min(560px, 84vh); background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; box-shadow: 0 16px 56px rgba(0, 0, 0, 0.5); overflow: hidden; }
 .dsc-picker-toast { position: absolute; top: 54px; left: 50%; transform: translateX(-50%); z-index: 5; background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-bg-layer-1); padding: 6px 14px; border-radius: 8px; font-size: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); pointer-events: none; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsc-picker-bar { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); flex-wrap: wrap; }
@@ -376,7 +394,7 @@ video.dsc-picker-player { max-height: 180px; }
 .dsc-job-preview { width: 56px; height: 56px; flex: none; border-radius: 6px; object-fit: cover; border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-2); }
 .dsc-job-preview--clickable { cursor: zoom-in; }
 /* --- lightbox: floating local panel, no full-screen dim --- */
-.dsc-lightbox { position: fixed; inset: 0; z-index: 9999; background: transparent; display: flex; align-items: center; justify-content: center; }
+.dsc-lightbox { position: fixed; inset: 0; z-index: 9999; background: transparent; display: flex; align-items: center; justify-content: center; -webkit-app-region: no-drag; }
 .dsc-lightbox-body { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 90vw; padding: 12px 12px 10px; background: rgba(12, 14, 18, 0.88); border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
 .dsc-lightbox-img { width: 100%; height: 80vh; object-fit: contain; border-radius: 8px; }
 .dsc-lightbox-media { max-width: 100%; max-height: 80vh; border-radius: 8px; }
