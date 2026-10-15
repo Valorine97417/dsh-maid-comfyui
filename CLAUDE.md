@@ -108,7 +108,7 @@ Agent ──tools──┐
 | --- | --- |
 | `tool.call.toolview`（keys `comfyui_run` / `comfyui_workflow`） | `card.tsx`：对话内媒体墙卡片（生成中状态 / 结果 / 点击放大） |
 | `settings.section`（id `comfyui`） | `settings.tsx`：设置页，读写 `/comfyui/config`，`/comfyui/test` 探测，含 zh/en 界面语言切换 |
-| `shell.overlay`（id `comfyui.panel`） | `panel.tsx`：浮动面板，三个页签 **工作流 / 资产 / 队列**，可拖拽缩放，几何信息存 localStorage（`clampPos`/`healGeom` 在拖拽、窗口缩放、换显示器、开闭面板时把标题栏钳在视口内，永不失去抓取面；标题栏「↺」按钮复位位置与大小、清 localStorage）；标题栏「⏻」按钮是**手动启停开关**（`pressPower`：点击先重读 `/comfyui/config` 的 `serverState.armed`，已武装 → 弹确认框走 `POST /comfyui/idle/stop`；未武装 → 有启动命令时走 `POST /comfyui/launch` 拉起，没有则提示。按钮不禁用，因为 armed 会随每次拉起 / 轮结束变化）；**打开面板本身不会启动 ComfyUI**（探测失败只弹提醒条，拉起靠条上的按钮）；工作流页底部是多加载位的加载区；技能包编辑器支持「刷新」重新读盘与子目录折叠；资产页卡片带删除确认框 |
+| `shell.overlay`（id `comfyui.panel`） | `panel.tsx`：浮动面板，三个页签 **工作流 / 资产 / 队列**，可拖拽缩放，几何信息存 localStorage（`clampPos`/`healGeom` 在拖拽、窗口缩放、换显示器、开闭面板时把标题栏钳在视口内，永不失去抓取面；标题栏「↺」按钮复位位置与大小、清 localStorage）；标题栏「⏻」按钮是**手动启停开关**（`pressPower`：点击先重读 `/comfyui/config` 的 `serverState.armed`，已武装 → 弹确认框走 `POST /comfyui/idle/stop`；未武装 → 有启动命令时走 `POST /comfyui/launch` 拉起，没有则提示。按钮不禁用，因为 armed 会随每次拉起 / 轮结束变化）；**打开面板本身不会启动 ComfyUI**（探测失败只弹提醒条说明原因，提醒条上没有任何启停按钮——启停只归 ⏻ 管）；工作流页底部是多加载位的加载区；技能包编辑器支持「刷新」重新读盘与子目录折叠；资产页卡片带删除确认框 |
 | `conversation.session.header.actions`（id `comfyui`） | `trigger.tsx`：会话头部按钮，开关面板 |
 
 配套：`panel-store.ts`（面板开关/页签的模块级 store + `useSyncExternalStore`）、`api.ts`（同源 fetch 封装）、`lightbox.tsx`（共享灯箱）、`i18n.ts`（zh/en 词典，语言存 localStorage，不跟随 host locale）、`styles.ts`（一次性注入样式，颜色取 host 主题 token `--dsw-alias-*`）。

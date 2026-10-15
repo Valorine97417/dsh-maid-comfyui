@@ -10,28 +10,28 @@
  *   failed probe, so the click looked like it did nothing and the sticky
  *   reminder was the only thing left on screen — with the window already gone.
  *   A failed backend is a reason to offer help, not to take the window away.
- * - The toast offers the way out: when a launcher command is configured, it
- *   carries a "start local ComfyUI" button that spawns it through the host
- *   (POST /comfyui/launch) and resolves only once the server answers.
+ * - The toast reports; it does not act. Starting and stopping the server lives
+ *   behind exactly one switch, the panel header's power button. An earlier
+ *   version carried its own "start local ComfyUI" button, which gave the same
+ *   decision two entry points and made the panel's button look broken whenever
+ *   the toast had already brought the server up.
  */
-import { createElement as h, useSyncExternalStore } from 'react'
-import { getJson, postJson } from './api.ts'
+import { Fragment, createElement as h, useSyncExternalStore } from 'react'
+import { postJson } from './api.ts'
 
 export interface ConnectionToastProps {
   t: (key: string, ...rest: unknown[]) => string
 }
 
-/** hidden → probing / launching (delayed fade-in) → fail (sticky) / ok (auto-hide). */
-type ConnStatus = 'hidden' | 'probing' | 'launching' | 'fail' | 'ok'
+/** hidden → probing (delayed fade-in) → fail (sticky) / ok (auto-hide). */
+type ConnStatus = 'hidden' | 'probing' | 'fail' | 'ok'
 
 interface ConnState {
   status: ConnStatus
-  /** Raw failure reason from the /comfyui/test or /comfyui/launch route. */
+  /** Raw failure reason from the /comfyui/test route. */
   message?: string
   version?: string
   latencyMs?: number
-  /** Whether the host has a launcher command to offer on failure. */
-  canLaunch?: boolean
 }
 
 const listeners = new Set<() => void>()
@@ -40,14 +40,7 @@ let state: ConnState = { status: 'hidden' }
 let inFlight: Promise<void> | null = null
 /** The ok toast only shows on fail→ok transitions, never on healthy opens. */
 let hadFailure = false
-/** Whether the launcher was already tried this page, so the retry button can
- * say "start again" rather than "start" after a failed attempt. */
-let launchedOnce = false
 let okHideTimer: ReturnType<typeof setTimeout> | null = null
-/** `canLaunch` comes from /comfyui/config, which costs a round-trip; the answer
- * only changes when the user edits settings, so one lookup per page load is
- * plenty. `undefined` = not asked yet. */
-let canLaunchCache: boolean | undefined
 /** Set when the user closes the toast themselves: failures then stop popping
  * up on their own (the panel's own error note still explains the tab), until a
  * probe succeeds once. Without this, every panel click re-raised the same red
@@ -81,27 +74,7 @@ export function dismissConnectionToast(): void {
   if (state.status !== 'hidden') setState({ status: 'hidden' })
 }
 
-/** Resolve whether the host can start ComfyUI for the user, once per page. */
-function canLaunch(): Promise<boolean> {
-  if (canLaunchCache !== undefined) return Promise.resolve(canLaunchCache)
-  return (async () => {
-    try {
-      // GET /comfyui/config answers the redacted config itself (not wrapped in
-      // a `config` key — only the POST reply wraps it). Reading `payload.config`
-      // here made canLaunch always false, which hid the start button and turned
-      // "start ComfyUI for me" into a dead end.
-      const payload = (await getJson('/comfyui/config')) as { canLaunch?: boolean }
-      canLaunchCache = payload.canLaunch === true
-    } catch {
-      // An unreadable config is not an answer; keep the offer but let the
-      // launch route report the real problem ("启动命令未配置").
-      canLaunchCache = true
-    }
-    return canLaunchCache
-  })()
-}
-
-/** Record a successful connection (shared by probe and launch). */
+/** Record a successful connection. */
 function settleOk(payload: { version?: string; latencyMs?: number }): void {
   lastOkAt = Date.now()
   const recovered = hadFailure && !suppressed
@@ -117,42 +90,13 @@ function settleOk(payload: { version?: string; latencyMs?: number }): void {
   }
 }
 
-/** Record a failure; the toast keeps the reason and any retry offer. */
-function settleFail(message: string, offer: boolean): void {
+/** Record a failure; the toast keeps the reason for the user to act on. */
+function settleFail(message: string): void {
   hadFailure = true
   // A failure the user already dismissed stays dismissed — re-raising the same
   // red toast on every panel click is what made the close button look broken.
   if (suppressed) return
-  setState({ status: 'fail', message, canLaunch: offer })
-}
-
-/**
- * Run the host-side launcher and report its verdict. Split from
- * probeConnection because the probe calls it automatically when ComfyUI is
- * down — the user's click should start the server, not ask them to click a
- * second time. Resolves only when the server answers (or the launch gives up).
- *
- * `explicit` marks a click on the toast's own button: that is a fresh request,
- * so it un-suppresses the toast, while the automatic attempt behind a panel
- * click stays quiet once the user dismissed an earlier failure.
- */
-async function runLaunch(explicit = false): Promise<void> {
-  clearOkTimer()
-  launchedOnce = true
-  if (explicit) suppressed = false
-  if (explicit || !suppressed) setState({ status: 'launching', canLaunch: state.canLaunch })
-  try {
-    const payload = (await postJson('/comfyui/launch', {})) as {
-      ok?: boolean
-      started?: boolean
-      version?: string
-      error?: string
-    }
-    if (payload.ok === true) settleOk({ version: payload.version })
-    else settleFail(payload.error ?? 'unknown error', true)
-  } catch (error) {
-    settleFail(error instanceof Error ? error.message : String(error), true)
-  }
+  setState({ status: 'fail', message })
 }
 
 /**
@@ -161,9 +105,9 @@ async function runLaunch(explicit = false): Promise<void> {
  * healthy repeated panel opens do not hammer the server; failures always
  * re-probe on the next open (the user may have just started ComfyUI).
  *
- * When the probe fails and a launcher is configured, the toast offers a start
- * button. It deliberately does not press it: opening the panel must not start a
- * multi-GB process by itself.
+ * Opening the panel never starts ComfyUI: bringing up a multi-GB process is a
+ * decision, not a side effect of looking at a panel. A down server is reported
+ * here, and the panel header's power button is the one place that starts it.
  */
 export function probeConnection(): Promise<void> {
   if (inFlight !== null) return inFlight
@@ -193,25 +137,8 @@ export function probeConnection(): Promise<void> {
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error)
     }
-    // Opening the panel never starts ComfyUI: bringing up a multi-GB process is
-    // a decision, not a side effect of looking at a panel. The toast carries the
-    // button (and the panel header has its own power button), so a down server
-    // is reported rather than silently launched.
-    settleFail(failure, await canLaunch())
+    settleFail(failure)
   })().finally(() => {
-    inFlight = null
-  })
-  return inFlight
-}
-
-/**
- * Start the local ComfyUI from the toast's retry button. Same launcher as the
- * automatic path; exported for the button, which is the only way back when the
- * automatic attempt was refused by the launcher's cooldown.
- */
-export function launchConnection(): Promise<void> {
-  if (inFlight !== null) return inFlight
-  inFlight = runLaunch(true).finally(() => {
     inFlight = null
   })
   return inFlight
@@ -230,30 +157,23 @@ function subscribe(listener: () => void): () => void {
 
 /** Fixed top-center status toast; mounted next to the header trigger so it
  * renders (and can be dismissed) even when the panel is closed again. The
- * probing/launching variants fade in after a short CSS delay, so a fast
- * successful probe never paints anything. */
+ * probing variant fades in after a short CSS delay, so a fast successful probe
+ * never paints anything. */
 export function ConnectionToast({ t }: ConnectionToastProps): ReturnType<typeof h> | null {
   const conn = useSyncExternalStore(subscribe, getConnState, getConnState)
   if (conn.status === 'hidden') return null
-  const busy = conn.status === 'probing' || conn.status === 'launching'
+  const busy = conn.status === 'probing'
   return h('div', { className: `dsc-conn-toast dsc-conn-toast--${conn.status}`, role: 'status' },
     h('span', { className: 'dsc-conn-toast-dot', 'aria-hidden': true }),
     h('div', { className: 'dsc-conn-toast-body' },
       conn.status === 'fail'
-        ? h('div', { className: 'dsc-conn-toast-body-inner' },
+        ? h(Fragment, null,
             h('div', { className: 'dsc-conn-toast-title' }, t('connFailTitle')),
             h('div', { className: 'dsc-conn-toast-text' }, t('connFailBody', { message: conn.message ?? '' })),
-            conn.canLaunch === true
-              ? h('button', {
-                  type: 'button',
-                  className: 'dsc-btn dsc-conn-toast-action',
-                  onClick: () => void launchConnection(),
-                }, launchedOnce ? t('connRetryButton') : t('connStartButton'))
-              : null,
           )
         : h('div', { className: 'dsc-conn-toast-title' },
             busy
-              ? conn.status === 'launching' ? t('connStarting') : t('connChecking')
+              ? t('connChecking')
               : t('connOk', { version: conn.version ?? 'unknown', ms: conn.latencyMs ?? 0 }),
           ),
     ),

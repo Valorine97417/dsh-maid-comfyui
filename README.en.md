@@ -44,15 +44,15 @@ A right-docked panel with three tabs:
 - **Assets** — every generated result with preview, download, and hover-to-delete (also removes the file from the ComfyUI output directory).
 - **Queue** — live queue plus full history in five states, with delete / interrupt / rerun / clear / free-memory actions; plugin-submitted jobs show a progress bar and preview.
 
-Clicking the "ComfyUI Panel" button in the session header probes the backend's connection to ComfyUI: a healthy connection stays silent, with a brief "Connected" note only when it recovers from a failure; when it cannot connect, a toast at the top of the page explains why (with the concrete reason) and **the panel still opens** — the toast carries "Start local ComfyUI" and "Open settings" actions, both dismissible, so the window never gets stuck.
+Clicking the "ComfyUI Panel" button in the session header probes the backend's connection to ComfyUI: a healthy connection stays silent, with a brief "Connected" note only when it recovers from a failure; when it cannot connect, a toast at the top of the page explains why (with the concrete reason) and **the panel still opens** — the toast only reports, and can be dismissed, so the window never gets stuck.
 
-"Start local ComfyUI" appears only when both hold: the settings `Launch command` is non-empty and the server address is local (loopback). It runs your command on this machine (e.g. `D:\ComfyUI_windows_portable\python_embeded\pythonw.exe -s ComfyUI\main.py --windows-standalone-build`, with the portable root as working directory), then probes once a second for up to 90 seconds; on success the panel opens, on timeout/failure the reason lands in the toast (the same failure is not retried within 10 seconds). A remote server shows no such button.
+There is exactly one switch: the **`⏻` button in the panel's top-right corner** (the window the "ComfyUI Panel" header button opens). When ComfyUI is down it runs the settings `Launch command` on this machine (e.g. `D:\ComfyUI_windows_portable\python_embeded\pythonw.exe -s ComfyUI\main.py --windows-standalone-build`, with the portable root as working directory), then probes once a second for up to 90 seconds; a timeout or failure lands in the panel's note area. When a server this plugin started is up, the same button stops it (with a confirmation first); a ComfyUI you started yourself is never a target and gets a refusal explaining why.
 
 > For a launch with no console window at all, use the portable build's `python_embeded\pythonw.exe` instead of its `run_nvidia_gpu.bat`: that batch file ends in `pause`, and the console window `cmd` opens for it stays up.
 
 The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done (the turn ends), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. **There is no idle timer** — the plugin never stops a server merely for being quiet. To start or stop it by hand: the `⏻` button in the panel's top-right corner (the window the "ComfyUI Panel" header button opens) — it starts the server when it is down, and stops the one this plugin started (with a confirmation first); a ComfyUI you started yourself is never a target.
 
-**Opening the panel never starts ComfyUI** (earlier versions did; that is gone). A failed probe only shows the toast, whose "Start local ComfyUI" button does the launching.
+**Opening the panel never starts ComfyUI** (earlier versions did; that is gone). A failed probe only shows a toast explaining the reason — press `⏻` in the panel header to start it.
 
 Stopped also means startable again: when `launchCommand` is configured, the agent probes before a run and starts ComfyUI with your command if it is down — no button press needed. A server that is already answering (one you started yourself, for instance) is not launched again and is not adopted by the plugin.
 
@@ -146,7 +146,7 @@ Self-test: `node scripts/test-subgraph-to-api.mjs` (pure offline fixtures, no Co
 | `apiKeyEnv` | `COMFYUI_API_KEY` | Optional API key env var / credential name |
 | `dataDir` | *(DSH data dir)* | Where the workflow library and asset index live |
 | `comfyuiDirs` | `[]` | Local ComfyUI install dirs (multiple allowed); the agent locates models, custom nodes, TTS voice libraries through these |
-| `launchCommand` | `''` | Command the panel's "Start local ComfyUI" button runs. Empty = no button |
+| `launchCommand` | `''` | Command the panel header's `⏻` button runs. Empty = `⏻` can only stop |
 | `launchDir` | `''` | Working directory for the launch command (the portable root for a portable build). Empty = the plugin's runtime dir |
 | `outputDir` | `''` (inferred) | ComfyUI output dir (used to locate files when deleting assets) |
 | `mediaHost` | `''` (auto) | External base URL for generated media |
