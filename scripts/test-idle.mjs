@@ -215,6 +215,83 @@ check('the launch marker survives a host restart', async () => {
   }
 })
 
+// --- the turn-end trigger (shutdownNow) -----------------------------------
+
+check('shutdownNow stops a plugin-started server without waiting for the window', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    idle.markLaunched(8188)
+    // Right after arming: the idle window would never fire this early.
+    assert.equal(await idle.check(Date.now()), 'skipped')
+    assert.equal(await idle.shutdownNow('turn-end'), 'idle')
+    assert.deepEqual(state.killed, [4242])
+    assert.equal(idle.snapshot().armed, false)
+  } finally {
+    idle.dispose()
+  }
+})
+
+check('shutdownNow during work in flight waits for the queue to drain', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    idle.markLaunched(8188)
+    state.busyValue = true
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    assert.equal(state.killed.length, 0)
+    assert.equal(idle.snapshot().armed, true)
+    // The request stays pending: the next tick, once the queue is empty, stops
+    // it even though no idle window has passed.
+    state.busyValue = false
+    assert.equal(await idle.check(Date.now()), 'idle')
+    assert.deepEqual(state.killed, [4242])
+  } finally {
+    idle.dispose()
+  }
+})
+
+check('shutdownNow on a port that is not listening yet stays armed', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    state.pids = []
+    idle.markLaunched(8188)
+    // Unlike the idle path, this must not disarm: a launch may not have bound
+    // the port yet, and the turn-end request is not evidence of anything.
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    assert.equal(state.killed.length, 0)
+    assert.equal(idle.snapshot().armed, true)
+  } finally {
+    idle.dispose()
+  }
+})
+
+check('shutdownNow never touches a server this plugin did not start', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    assert.equal(state.killed.length, 0)
+  } finally {
+    idle.dispose()
+  }
+})
+
+check('minutes = 0 disables the turn-end shutdown too', async () => {
+  const { deps, state } = makeDeps()
+  const idle = createIdleShutdown(deps)
+  try {
+    state.minutes = 0
+    idle.markLaunched(8188)
+    assert.equal(await idle.shutdownNow('turn-end'), 'skipped')
+    assert.equal(state.killed.length, 0)
+    assert.equal(idle.snapshot().armed, true)
+  } finally {
+    idle.dispose()
+  }
+})
+
 check('dispose stops the clock and the shutdown', async () => {
   const { deps, state } = makeDeps()
   const idle = createIdleShutdown(deps)

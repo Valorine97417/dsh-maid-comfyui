@@ -24,7 +24,7 @@ comfyui_workflow 的 \`action: list\` 会同时返回：插件库中的 API 工�
 
 - \`comfyui_workflow action: list\` 每次都会返回 \`env\` 字段：\`baseUrl\`（ComfyUI 服务器地址）与 \`comfyuiDirs\`（用户在设置页"ComfyUI 目录"配置的安装目录，可多个——目录映射/多实例/便携版）。**需要知道服务器地址，或要定位用户 ComfyUI 的文件（models、自定义节点、音色库、输出目录等都在这下面）时，先跑一次 list 读 env**。每次调用都取最新值，设置页改完立刻生效。
 - \`comfyuiDirs\` 为空 = 未配置：先询问用户，或探测常见位置（\`C:\\ComfyUI\`、\`D:\\ComfyUI\`、ComfyUI 桌面版 \`...\\ComfyUI-Installs\\ComfyUI\\ComfyUI\`）。以下所有 \`{comfyuiDir}\` 都代指 env.comfyuiDirs 里的每个目录。
-- **ComfyUI 没在跑**（\`comfyui_run\` / \`action: list\` 报连不上）：别干等也不要反复重试同一个请求。ComfyUI 是桌面壳拖起的子进程，**DSH 一重启它就跟着死**。请用户点会话头部「ComfyUI 面板」按钮（里面有一键启动，前提是设置页填了"启动命令"），没填就让用户跑便携版的 \`run_nvidia_gpu.bat\`。
+- **ComfyUI 没在跑**：直接跑工作流就行——设置页填了「启动命令」时，插件在每次排队前会先探一下，没在跑就按用户的命令拉起来（拉起来了才排队）。**不要干等，也不要反复重试同一个请求**。只有拉起失败或没填启动命令时才找用户：会话头部「ComfyUI 面板」按钮里也有一键启动，没填启动命令就让用户去设置页填「启动命令」，或手动跑便携版的 \`run_nvidia_gpu.bat\`。注意本插件启动的那个 ComfyUI **会在会话里的任务结束后自动关闭**（把显存还回去），所以下一次跑工作流它可能不在——这是正常现象，照上面走即可，不要当成故障。
 
 ## TTS-Audio-Suite 音色库查询（先刷新快照，再查询；不用翻插件源码）
 

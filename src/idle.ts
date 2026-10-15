@@ -4,7 +4,10 @@
  * A ComfyUI server holds several GB of VRAM loaded and a few hundred MB of
  * RSS even with nothing queued, so leaving one running after a single image is
  * waste the user pays for in every other GPU workload. The plugin therefore
- * stops the server it started itself once nobody has used it for a while.
+ * stops the server it started itself once the work is over — the primary
+ * trigger is the end of a conversation turn (see `shutdownNow`), with the idle
+ * window as a backstop for whatever never reaches a turn boundary (a crash, a
+ * client that vanished, a browser-only run).
  *
  * Boundaries, deliberately narrow:
  * - Only an instance **this plugin launched** is ever stopped. `armed` is set
@@ -57,6 +60,15 @@ export interface IdleShutdown {
   markLaunched(port: number): void
   /** Forget the launch (the server is down or the plugin is unloading). */
   clearLaunched(): void
+  /**
+   * Stop because the work is over (the conversation's turn ended) — the idle
+   * window does not apply, since the point is to give the VRAM back the moment
+   * nobody needs it. The safety gates still do: an unarmed server, an
+   * in-flight generation, and a server that never bound its port all keep it
+   * alive. A run that outlives the turn leaves the request pending, so the
+   * next tick stops the server as soon as the queue drains.
+   */
+  shutdownNow(reason: string): Promise<'idle' | 'skipped'>
   /** One check, exposed so tests drive the clock directly. */
   check(now?: number): Promise<'idle' | 'skipped'> | 'idle' | 'skipped'
   dispose(): void
@@ -136,6 +148,11 @@ export function createIdleShutdown(deps: IdleShutdownDeps): IdleShutdown {
   let port: number | null = null
   let running = false
   let disposed = false
+  /** A "the work is over" request that arrived while the queue was still
+   * draining. The next tick finishes the job instead of waiting out a whole
+   * idle window — an async run outliving its turn is the common case, not an
+   * exception. */
+  let pending = false
 
   /** Restore the launch marker written by a previous host run. */
   function restore(): void {
@@ -166,33 +183,54 @@ export function createIdleShutdown(deps: IdleShutdownDeps): IdleShutdown {
     }
   }
 
-  async function check(now: number = Date.now()): Promise<'idle' | 'skipped'> {
+  /**
+   * The one shutdown path. `idleMs` is the elapsed idle window for the timer
+   * route and `null` for an explicit "the work is over" request, which skips
+   * the window but keeps every safety gate. Returns 'idle' when the server was
+   * asked to stop.
+   */
+  async function stop(reason: string, idleMs: number | null): Promise<'idle' | 'skipped'> {
     if (disposed || running) return 'skipped'
-    const minutes = deps.minutes()
-    if (!armed || port === null || minutes <= 0) return 'skipped'
-    const idleMs = now - lastActivity
-    if (idleMs < minutes * 60_000 || idleMs < LAUNCH_GRACE_MS) return 'skipped'
+    // `0` disables every automatic stop, not just the timed one: a user who
+    // turned the behaviour off must not watch the server vanish when a turn
+    // ends. The panel's "stop now" button bypasses this module entirely.
+    if (!armed || port === null || deps.minutes() <= 0) return 'skipped'
+    if (idleMs !== null && idleMs < LAUNCH_GRACE_MS) return 'skipped'
     running = true
     try {
       if (await deps.busy()) {
         // Queue not empty: the user (or a slow render) is still working. The
-        // clock restarts so the next check is a full window away.
-        lastActivity = now
-        deps.log?.('idle: shutdown skipped, work in flight')
+        // clock restarts so the next check is a full window away — except for
+        // an explicit request, which is remembered so the next tick finishes
+        // the job the moment the queue drains.
+        lastActivity = Date.now()
+        if (idleMs === null) pending = true
+        deps.log?.(`idle: ${reason} shutdown skipped, work in flight`)
         return 'skipped'
       }
       const pids = await deps.findPids(port)
       if (pids.length === 0) {
-        deps.log?.(`idle: nothing listening on ${String(port)}, disarming`)
-        armed = false
-        persist()
+        // On the timed route an empty port means the server is gone for good,
+        // so the marker is dropped. An explicit request can land while a fresh
+        // launch is still binding its port — disarming there would silently
+        // disable the watchdog, so the launch stays armed for the next tick.
+        if (idleMs !== null) {
+          deps.log?.(`idle: nothing listening on ${String(port)}, disarming`)
+          armed = false
+          pending = false
+          persist()
+        } else {
+          deps.log?.(`idle: ${reason} shutdown skipped, nothing listening on ${String(port)} yet`)
+        }
         return 'skipped'
       }
-      deps.log?.(`idle: stopping ComfyUI on port ${String(port)} after ${String(Math.round(idleMs / 60_000))}m (pid ${pids.join(',')})`)
+      const waited = idleMs === null ? '' : ` after ${String(Math.round(idleMs / 60_000))}m`
+      deps.log?.(`idle: stopping ComfyUI on port ${String(port)}${waited} (${reason}; pid ${pids.join(',')})`)
       await deps.kill(pids)
       armed = false
+      pending = false
       persist()
-      deps.log?.('idle: shutdown requested')
+      deps.log?.(`idle: shutdown requested (${reason})`)
       return 'idle'
     } catch (error) {
       deps.log?.(`idle: shutdown failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -200,6 +238,18 @@ export function createIdleShutdown(deps: IdleShutdownDeps): IdleShutdown {
     } finally {
       running = false
     }
+  }
+
+  function check(now: number = Date.now()): Promise<'idle' | 'skipped'> | 'idle' | 'skipped' {
+    if (disposed || running) return 'skipped'
+    const minutes = deps.minutes()
+    if (!armed || port === null || minutes <= 0) return 'skipped'
+    // A turn ended while the queue was still draining: finish that job now
+    // rather than making the server wait out a full idle window.
+    if (pending) return stop('turn-end', null)
+    const idleMs = now - lastActivity
+    if (idleMs < minutes * 60_000) return 'skipped'
+    return stop('idle', idleMs)
   }
 
   restore()
@@ -223,6 +273,9 @@ export function createIdleShutdown(deps: IdleShutdownDeps): IdleShutdown {
       armed = false
       port = null
       persist()
+    },
+    shutdownNow(reason) {
+      return stop(reason, null)
     },
     check,
     dispose() {

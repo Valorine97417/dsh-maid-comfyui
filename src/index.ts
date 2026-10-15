@@ -213,6 +213,46 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
     idle.dispose()
   }, 'dsh-maid-comfyui: idle shutdown')
 
+  // The end of a conversation turn is the primary shutdown trigger: a
+  // generation is the reason the server is up, and once the turn that asked
+  // for it is over, nobody is waiting for the VRAM any more. The idle window
+  // stays as a backstop for whatever never reaches a turn boundary. Reason
+  // kinds that are not a real end of work ('forked' seeds a copy, 'interrupted'
+  // is a crash orphan written during recovery) leave the server alone.
+  ctx.on('session/event' as never, ((_session: unknown, event: { type?: string; data?: { reason?: { kind?: string } } }) => {
+    if (event.type !== 'turn/end') return
+    const kind = event.data?.reason?.kind
+    if (kind === 'forked' || kind === 'interrupted') return
+    void idle.shutdownNow('turn-end').catch(() => undefined)
+  }) as never)
+
+  /**
+   * Make sure a local ComfyUI is up before a run is queued. Stopping the server
+   * when the work is over is only pleasant if the next run brings it back —
+   * otherwise every generation after the first starts with a connection error
+   * the user has to fix by hand from the panel. A remote baseUrl and an empty
+   * `launchCommand` both mean "not ours to start", so those fall through to
+   * the client, which reports the real error.
+   *
+   * Only a launch that actually spawned the process arms the idle watchdog: a
+   * server that was already answering is not necessarily ours (the user may
+   * have started it by hand), and a ComfyUI this plugin did not start must
+   * never be stopped by it.
+   */
+  const ensureServer = async (): Promise<void> => {
+    if (localPortOf(resolved.baseUrl) === undefined || resolved.launchCommand.trim() === '') return
+    const outcome = await launcher.launch()
+    if (!outcome.ok) {
+      throw new Error(
+        `ComfyUI is not reachable at ${resolved.baseUrl}, and the configured launch command did not bring it up: ${outcome.error ?? 'unknown error'}`,
+      )
+    }
+    if (outcome.started === true) {
+      const port = localPortOf(resolved.baseUrl)
+      if (port !== undefined) idle.markLaunched(port)
+    }
+  }
+
   const runtime: ComfyUIRuntime = {
     getConfig: () => resolved,
     getApiKey: () => resolveApiKey(ctx, resolved.apiKeyEnv),
@@ -252,6 +292,11 @@ export async function apply(ctx: Context, entryConfig: Partial<Record<keyof Conf
       }
     },
     queue: async (workflow, meta) => {
+      // The watchdog stops the server once the work is over, so a run has to be
+      // able to bring it back: probe first, launch when the panel's command is
+      // configured. This is the one place every run funnels through (tools,
+      // panel, rerun), so it is the only place that needs it.
+      await ensureServer()
       const client = runtime.createClient(await resolveApiKey(ctx, resolved.apiKeyEnv))
       // Heals library entries saved with the pre-0.5.2 wrapped DynamicCombo shape (Issue #10).
       let prompt = flattenDynamicCombos(workflow as unknown as Workflow)

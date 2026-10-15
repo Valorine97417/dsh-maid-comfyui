@@ -23,7 +23,7 @@ interface ConfigView {
   comfyuiDirs: string[]
   launchCommand: string
   launchDir: string
-  /** Idle minutes after which a plugin-started ComfyUI is stopped; 0 disables. */
+  /** Backstop idle minutes after which a plugin-started ComfyUI is stopped; 0 disables both automatic stops. */
   idleShutdownMinutes: number
   idleState: { armed: boolean; port: number | null; idleMs: number; minutes: number }
   canShutdown: boolean
@@ -47,7 +47,7 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
   const [comfyuiDirs, setComfyuiDirs] = useState<string[]>([])
   const [launchCommand, setLaunchCommand] = useState('')
   const [launchDir, setLaunchDir] = useState('')
-  const [idleMinutes, setIdleMinutes] = useState('10')
+  const [idleMinutes, setIdleMinutes] = useState('30')
   const [skillsDir, setSkillsDir] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -69,7 +69,7 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
       setComfyuiDirs(Array.isArray(view.comfyuiDirs) ? view.comfyuiDirs : [])
       setLaunchCommand(view.launchCommand ?? '')
       setLaunchDir(view.launchDir ?? '')
-      setIdleMinutes(String(view.idleShutdownMinutes ?? 10))
+      setIdleMinutes(String(view.idleShutdownMinutes ?? 30))
       setSkillsDir(view.skillsDir ?? '')
     }).catch((error: unknown) => {
       if (cancelled) return
@@ -84,7 +84,7 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
    * The host schema clamps the rest (0 = never stop, 1440 = a day). */
   const idleMinutesNumber = (): number => {
     const parsed = Number(idleMinutes.trim())
-    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.round(parsed), 1_440) : 10
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.round(parsed), 1_440) : 30
   }
 
   const idleStatusText = (): string => {
@@ -219,7 +219,7 @@ export function ComfyUISettings({ t }: ComfyUISettingsProps): ReturnType<typeof 
       h('input', {
         className: 'dsc-input',
         value: idleMinutes,
-        placeholder: '10',
+        placeholder: '30',
         inputMode: 'numeric',
         onChange: (event: { target: { value: string } }) => { setIdleMinutes(event.target.value); setSaveState('idle') },
       }),

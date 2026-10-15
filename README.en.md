@@ -50,7 +50,9 @@ Clicking the "ComfyUI Panel" button in the session header probes the backend's c
 
 > For a launch with no console window at all, use the portable build's `python_embeded\pythonw.exe` instead of its `run_nvidia_gpu.bat`: that batch file ends in `pause`, and the console window `cmd` opens for it stays up.
 
-The other direction is covered too: a ComfyUI **this plugin started** is stopped automatically once it has been idle for `idleShutdownMinutes` (10 by default), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. Set that field to `0` to disable the behaviour entirely, or press "Stop now" beside it to stop immediately.
+The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done, returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. If the end of the turn never arrives (host crash, vanished client), the idle backstop `idleShutdownMinutes` (30 by default) catches it; set that field to `0` to disable both automatic stops, or press "Stop now" beside it to stop immediately.
+
+Stopped also means startable again: when `launchCommand` is configured, the agent probes before a run and starts ComfyUI with your command if it is down — no button press needed. A server that is already answering (one you started yourself, for instance) is not launched again and is not adopted by the plugin.
 
 <p align="center"><img src="images/panel.png" width="70%" alt="Main panel: workflows / assets / queue" title="Main panel: workflows / assets / queue" /></p>
 
@@ -144,7 +146,7 @@ Self-test: `node scripts/test-subgraph-to-api.mjs` (pure offline fixtures, no Co
 | `comfyuiDirs` | `[]` | Local ComfyUI install dirs (multiple allowed); the agent locates models, custom nodes, TTS voice libraries through these |
 | `launchCommand` | `''` | Command the panel's "Start local ComfyUI" button runs. Empty = no button |
 | `launchDir` | `''` | Working directory for the launch command (the portable root for a portable build). Empty = the plugin's runtime dir |
-| `idleShutdownMinutes` | `10` | Idle minutes after which a ComfyUI **this plugin started** is stopped, returning its VRAM. `0` disables the shutdown |
+| `idleShutdownMinutes` | `30` | Idle backstop for a ComfyUI **this plugin started** when the end of a turn never arrives (host crash, vanished client). `0` disables both automatic stops |
 | `outputDir` | `''` (inferred) | ComfyUI output dir (used to locate files when deleting assets) |
 | `mediaHost` | `''` (auto) | External base URL for generated media |
 | `skillsDir` | `''` (default `dataDir/skills`) | Skill pack root (absolute path; a synced folder or VCS works) |

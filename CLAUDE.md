@@ -24,7 +24,7 @@ node scripts/test-skillpack.mjs      # 离线自测：技能包 CRUD / 路径穿
 node scripts/test-transfer.mjs       # 离线自测：预设导出/导入回环（需先 build）
 node scripts/test-convert.mjs        # 离线自测：画布分析与图→API 转换回归（需先 build）
 node scripts/test-launch.mjs         # 离线自测：面板一键启动的判据（需先 build；不真拉服务）
-node scripts/test-idle.mjs           # 离线自测：空闲关闭的四条边界（需先 build；不真拉/杀进程）
+node scripts/test-idle.mjs           # 离线自测：关闭看门狗的两条触发口与边界（需先 build；不真拉/杀进程）
 ```
 
 **改动生效规则**：`src/*.ts`（host：tools/routes/store/params/skill…）改完要 **重启 DSH**；`src/client/*` 改完 **刷新页面** 即可。skill 文本编译进 `lib/skill.js`，属 host 侧。
@@ -73,7 +73,7 @@ Agent ──tools──┐
 | `tools.ts` | 模型侧工具定义与注册 + `ComfyUIRuntime` 接口 + 后台任务/结果回显。 |
 | `routes.ts` | 浏览器侧同源 HTTP 路由（面板与设置页的全部数据来源），写操作强制同源。 |
 | `launch.ts` | 本机 ComfyUI 的**拉起器**：`createLauncher({ command, dir, probe, log })`，先 `probe()` 探一次——已通则直接返回 `{ ok: true, started: false }`；未通则 `spawn(command, { cwd: dir, shell: true, detached: true, stdio: 'ignore', windowsHide: true })` 后每 1 秒探一次、最多 90 秒（`POLL_TIMEOUT_MS`），起来了返回 `{ ok: true, started: true, version }`。同一失败 10 秒冷却（`FAIL_COOLDOWN_MS`），`inFlight` 去重并发点击；`command` 为空返回 `launch-not-configured`。**这是全项目第二个会拉起本地进程的模块**（另一个是 `workflows/skill/reveal`）：命令来自用户设置（`launchCommand`/`launchDir`），不是请求；路由只对本机 baseUrl 开放。 |
-| `idle.ts` | 本机 ComfyUI 的**空闲关闭**：`createIdleShutdown({ minutes, busy, findPids, kill, markerPath, log })` 每 30 秒（`TICK_MS`）看一次；只有「**本插件启动的**（`markLaunched` 打标，标记写在 `<dataDir>/launched.json`、跨宿主重启认回）+ **回环 baseUrl**（`localPortOf`）+ **没有任务在飞**（`busy()` 同时看 ComfyUI `/queue` 与 `tracker`）+ 空闲满 `idleShutdownMinutes`」四条全中才动手。PID **在关停时**按端口反查（`findListeningPids`：win32 走 `netstat -ano -p TCP`，其他走 `lsof -iTCP:<port> -sTCP:LISTEN -t`），从不缓存——`.bat` 启动器自己立刻退出，spawn 到的 pid 不是服务器的 pid；关停走 `taskkill /PID <pid> /T /F`（进程树）。用户自己开的 ComfyUI 因为没打标，永远不会被碰。ComfyUI 0.39 没有任何退出路由（只有 `/interrupt`、`/free`），所以关停只能是杀进程。 |
+| `idle.ts` | 本机 ComfyUI 的**关闭看门狗**，两个触发口：① `shutdownNow(reason)` = **对话轮结束**（主触发，`index.ts` 订阅 `session/event` 的 `turn/end` 后调用）——不看空闲窗口，工作一完就还显存；② 定时器每 30 秒（`TICK_MS`）看一次的**空闲兜底**，只捞没走到轮边界的（宿主崩了、客户端断了）。两条路共用内部 `stop(reason, idleMs)`：只有「**本插件启动的**（`markLaunched` 打标，标记写在 `<dataDir>/launched.json`、跨宿主重启认回）+ **回环 baseUrl**（`localPortOf`）+ **没有任务在飞**（`busy()` 同时看 ComfyUI `/queue` 与 `tracker`）」全中才动手；计时路线还要求空闲满 `idleShutdownMinutes`。任务在飞时轮结束请求记成 `pending`，队列一空的下一次 tick 立刻关（运行可能比一轮对话活得久）。`minutes = 0` 把**两种**自动停止一起关掉（面板「立即停止」不走本模块，永远可用）。端口没监听时：计时路线**解除武装**（那个实例已经没了），显式请求路线只跳过、**保持武装**（刚拉起的还没绑定端口）。PID **在关停时**按端口反查（`findListeningPids`：win32 走 `netstat -ano -p TCP`，其他走 `lsof -iTCP:<port> -sTCP:LISTEN -t`），从不缓存——`.bat` 启动器自己立刻退出，spawn 到的 pid 不是服务器的 pid；关停走 `taskkill /PID <pid> /T /F`（进程树）。用户自己开的 ComfyUI 因为没打标，永远不会被碰。ComfyUI 0.39 没有任何退出路由（只有 `/interrupt`、`/free`），所以关停只能是杀进程。 |
 | `proxy.ts` | `/comfyui/media` 媒体代理：主路径按 `file`+`subfolder`+`type` 直取（不依赖 history），旧的 prompt/node/index 链接先查 history，查不到再回落到资产索引里的文件引用。 |
 | `http.ts` | 路由小工具：`sendJson` / `readJsonBody` / `readRawBody` / `sameOrigin` / `errorMessage`。 |
 | `host-hint.ts` | 记住浏览器实际访问用的 origin（Host/Referer），让生成的媒体 URL 对远端浏览器可达；回环 origin 不覆盖已知外部 origin；`detectLanOrigin` 作兜底。 |
