@@ -138,6 +138,16 @@ select.dsc-input option { background: var(--dsw-alias-bg-layer-1); color: var(--
 .dsc-panel-head-actions { display: inline-flex; align-items: center; gap: 2px; }
 .dsc-panel-reset { border: none; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font-size: 13px; padding: 4px 6px; line-height: 1; }
 .dsc-panel-reset:hover { color: var(--dsw-alias-label-primary); }
+/* Stop button: dimmed rather than hidden while no plugin-launched server is
+   armed, so the control does not appear and vanish between runs (the title
+   says why). */
+.dsc-panel-stop { border: none; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font-size: 13px; padding: 4px 6px; line-height: 1; }
+.dsc-panel-stop:hover:not(:disabled) { color: var(--dsw-alias-state-error-primary); }
+.dsc-panel-stop:disabled { opacity: 0.3; cursor: default; }
+/* No plugin-launched server armed: the button stays clickable (it re-checks and
+   explains), just visually dimmed so it does not read as an armed stop. */
+.dsc-panel-stop--idle { opacity: 0.4; }
+.dsc-panel-note { padding: 6px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .dsc-panel-close { border: none; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 14px; padding: 4px 8px; }
 .dsc-panel-close:hover { color: var(--dsw-alias-label-primary); }
 .dsc-tabs { display: flex; border-bottom: 1px solid var(--dsw-alias-border-l1); }

@@ -1082,6 +1082,15 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
   const [geom, setGeom] = useState<PanelGeom>(() => healGeom(loadGeom(), window.innerWidth, window.innerHeight))
   const [dragging, setDragging] = useState<'move' | 'resize' | null>(null)
   const [lightbox, setLightbox] = useState<{ images: string[]; kinds: Array<'image' | 'video' | 'audio' | 'other'>; index: number } | null>(null)
+  // Stopping ComfyUI is a host-side side effect, so the header only offers it
+  // when the host reports an armed, plugin-launched server — the same boundary
+  // the idle watchdog honours, since a ComfyUI the user started by hand is
+  // never a target. `null` = not asked yet (or unreadable): the button stays
+  // disabled rather than offering a stop the host would refuse.
+  const [canShutdown, setCanShutdown] = useState<boolean | null>(null)
+  const [stopAsk, setStopAsk] = useState(false)
+  const [stopBusy, setStopBusy] = useState(false)
+  const [stopNote, setStopNote] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; width: number; height: number } | null>(null)
 
@@ -1106,6 +1115,29 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
     const onResize = (): void => setGeom((prev) => healGeom(prev, window.innerWidth, window.innerHeight))
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
+  }, [open])
+
+  // Opening the panel re-reads the shutdown verdict: whether a plugin-launched
+  // server is armed changes with every launch, turn end and manual stop, so a
+  // once-per-page cache (as the launcher button uses) would go stale the moment
+  // the first run finishes.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void (async () => {
+      try {
+        // GET /comfyui/config answers the redacted config itself — no `config`
+        // wrapper (only the POST reply wraps it).
+        const payload = (await getJson('/comfyui/config')) as { canShutdown?: boolean }
+        if (!cancelled) setCanShutdown(payload.canShutdown === true)
+      } catch {
+        // An unreadable config is not a "yes"; leave the button disabled.
+        if (!cancelled) setCanShutdown(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [open])
 
   const startDrag = (event: PointerEventLike, mode: 'move' | 'resize'): void => {
@@ -1155,6 +1187,50 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
     })
   }
 
+  /** Stop the plugin-launched ComfyUI now: no waiting for the turn end or the
+   * idle backstop. The route answers `not-launched-by-plugin` for a server the
+   * user started themselves — that refusal is the feature, not a bug. */
+  const stopComfy = async (): Promise<void> => {
+    setStopBusy(true)
+    try {
+      const result = (await postJson('/comfyui/idle/stop', {})) as { ok?: boolean; stopped?: boolean; error?: string }
+      if (result.ok === true) {
+        // `stopped: false` means nothing was listening any more — the server is
+        // down either way, so the same feedback is honest.
+        setStopNote(t('stopped'))
+        setCanShutdown(false)
+      } else {
+        setStopNote(`${t('stopFailed')}${result.error !== undefined ? ` (${result.error})` : ''}`)
+      }
+    } catch (error) {
+      setStopNote(`${t('stopFailed')} (${error instanceof Error ? error.message : String(error)})`)
+    } finally {
+      setStopBusy(false)
+      setStopAsk(false)
+    }
+  }
+
+  /** Re-check the verdict, then confirm. The button is never disabled: a run
+   * that happened since the panel opened may have launched a new server, so the
+   * click is the moment to ask rather than trusting a value read earlier. */
+  const askStop = async (): Promise<void> => {
+    setStopNote(null)
+    let armed = canShutdown === true
+    try {
+      const payload = (await getJson('/comfyui/config')) as { canShutdown?: boolean }
+      armed = payload.canShutdown === true
+      setCanShutdown(armed)
+    } catch {
+      // Unreadable config is not a verdict; fall back to the last known one and
+      // let the stop route give the real answer.
+    }
+    if (!armed) {
+      setStopNote(t('idleNotLaunched'))
+      return
+    }
+    setStopAsk(true)
+  }
+
   if (!open) return null
 
   const panelStyle: Record<string, string> = {}
@@ -1182,6 +1258,13 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
       ),
       h('span', { className: 'dsc-panel-head-actions' },
         h('button', {
+          className: canShutdown === true ? 'dsc-panel-stop' : 'dsc-panel-stop dsc-panel-stop--idle',
+          type: 'button',
+          title: t('stopComfy'),
+          'aria-label': t('stopComfy'),
+          onClick: () => void askStop(),
+        }, '⏻'),
+        h('button', {
           className: 'dsc-panel-reset',
           type: 'button',
           title: t('panelReset'),
@@ -1204,6 +1287,7 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
         }, '✕'),
       ),
     ),
+    stopNote !== null ? h('div', { className: 'dsc-panel-note' }, stopNote) : null,
     h('div', { className: 'dsc-tabs' },
       h(TabButton, { t, active: tab === 'workflows', label: t('tabWorkflows'), onClick: () => panelStore.setTab('workflows') }),
       h(TabButton, { t, active: tab === 'assets', label: t('tabAssets'), onClick: () => panelStore.setTab('assets') }),
@@ -1225,6 +1309,17 @@ export function ComfyUIPanel({ t }: ComfyUIPanelProps): ReturnType<typeof h> | n
       onClose: () => setLightbox(null),
       onIndex: (index: number) => setLightbox({ images: lightbox.images, kinds: lightbox.kinds, index }),
     }) : null,
+    stopAsk
+      ? h(ConfirmDialog, {
+          t,
+          title: t('stopComfyTitle'),
+          body: t('stopComfyBody'),
+          busy: stopBusy,
+          confirmLabel: stopBusy ? t('stopping') : t('stopNow'),
+          onConfirm: () => { void stopComfy() },
+          onCancel: () => setStopAsk(false),
+        })
+      : null,
     h('div', {
       className: 'dsc-panel-resize',
       onPointerDown: (event: PointerEventLike) => startDrag(event, 'resize'),
@@ -3204,13 +3299,16 @@ function AssetsTab({ t, onPreview }: { t: ComfyUIPanelProps['t']; onPreview: (im
   )
 }
 
-/** Modal confirmation for a destructive action (asset deletion). */
+/** Modal confirmation for a destructive action (asset deletion, stopping the
+ * ComfyUI server). `confirmLabel` defaults to the delete wording so existing
+ * callers keep their text. */
 function ConfirmDialog(props: {
   t: ComfyUIPanelProps['t']
   title: string
   body: string
   detail?: string
   busy: boolean
+  confirmLabel?: string
   onConfirm: () => void
   onCancel: () => void
 }): ReturnType<typeof h> {
@@ -3223,7 +3321,7 @@ function ConfirmDialog(props: {
         : null,
       h('div', { className: 'dsc-confirm-actions' },
         h('button', { className: 'dsc-btn', disabled: props.busy, onClick: props.onCancel }, props.t('cancel')),
-        h('button', { className: 'dsc-btn dsc-btn--danger', disabled: props.busy, onClick: props.onConfirm }, props.t('confirmDelete')),
+        h('button', { className: 'dsc-btn dsc-btn--danger', disabled: props.busy, onClick: props.onConfirm }, props.confirmLabel ?? props.t('confirmDelete')),
       ),
     ),
   )

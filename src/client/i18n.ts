@@ -62,6 +62,9 @@ export const zh = {
   // panel shell
   panelTitle: 'ComfyUI 面板',
   panelReset: '复位位置与大小',
+  stopComfy: '关闭本插件启动的 ComfyUI',
+  stopComfyTitle: '关闭 ComfyUI？',
+  stopComfyBody: '将停掉本插件启动的那个 ComfyUI，把显存立刻还回去。正在排队或运行的任务会等它跑完再关；你自己手动开的 ComfyUI 不会被关。',
   close: '关闭',
   lbPrev: '上一张',
   lbNext: '下一张',
@@ -353,6 +356,9 @@ export const en = {
   // panel shell
   panelTitle: 'ComfyUI Panel',
   panelReset: 'Reset position & size',
+  stopComfy: 'Stop the ComfyUI this plugin started',
+  stopComfyTitle: 'Stop ComfyUI?',
+  stopComfyBody: 'Stops the ComfyUI this plugin started and hands the VRAM back right away. Queued or running work finishes first; a ComfyUI you started yourself is never touched.',
   close: 'Close',
   lbPrev: 'Previous image',
   lbNext: 'Next image',
