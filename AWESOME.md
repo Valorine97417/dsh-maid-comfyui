@@ -21,7 +21,7 @@
 - [x] 把仓库 URL 填进 package.json 的 `repository` 字段（已完成，`git+https://github.com/Valorine97417/dsh-maid-comfyui.git`）
 - [ ] 按 awesome-dsh-plugin 仓库的贡献规范提交条目（通常是在其列表文件加一行 + PR）
 - [ ] 合并后 dshmarket 会在约一天内自动收录
-- [ ] 真实环境冒烟：启动 ComfyUI（默认 127.0.0.1:8188），在面板里对 ComfyUI 端保存的图点"提取"（验证多分量图的分量拆分）并运行提取出的执行流；再让 Agent 跑一次 txt2img，检查媒体卡片渲染与下载；视频模板需要 ComfyUI-WanVideoWrapper
+- [ ] 真实环境冒烟：启动 ComfyUI（默认 127.0.0.1:8188），在面板里对 ComfyUI 端保存的图点「提取」（验证多分量图的分量拆分）并运行提取出的执行流；再让 Agent 跑一次 txt2img，检查媒体卡片渲染与下载；视频模板需要 ComfyUI-WanVideoWrapper
 
 ## dshmarket 收录说明
 

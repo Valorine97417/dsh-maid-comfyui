@@ -50,7 +50,7 @@ Agent 直接驱动 ComfyUI，无需手动操作画布：
 
 > 想让启动过程完全无窗口，命令里用便携版的 `python_embeded\pythonw.exe`，别用自带的 `run_nvidia_gpu.bat`：那个 bat 结尾有 `pause`，且由 `cmd` 拉起的控制台窗口会一直挂着。
 
-反过来也管：**本插件启动的**那个 ComfyUI，会话里的活儿一干完（这一轮对话结束）就会自动关掉，把几 GB 显存还回去——你手动开的那个永远不会被关，有任务在排队 / 在跑也不会关。**没有空闲自动关闭**：插件不会因为服务器闲着就动它。想手动启停：面板头部右上角的 `⏻` 按钮（会话头部「ComfyUI 面板」按钮打开的那个窗口）——没开时点它启动，开着且是本插件启动的时点它关闭（会先弹确认框）；你自己手动开的那个关不掉，会提示原因。
+反过来也管：**本插件启动的**那个 ComfyUI，会话里的活儿一干完（这一轮对话结束）就会自动关掉，把几 GB 显存还回去——你手动开的那个永远不会被关，有任务在排队 / 在跑也不会关。**没有空闲自动关闭**：插件不会因为服务器闲着就动它。想手动启停：面板头部右上角的 `⏻` 按钮（行为见上文「启停只有一个口」）。
 
 **打开面板本身不会启动 ComfyUI**（早期版本会，现已改掉）；探不到服务器时只弹一条说明原因的提醒，启动请按面板头部的 `⏻`。
 
@@ -66,9 +66,9 @@ Agent 直接驱动 ComfyUI，无需手动操作画布：
 
 ### 工作流技能包（给 Agent 的说明书）
 
-参数清单只能告诉 Agent"有哪些旋钮"，说不出"这个工作流适合什么、哪一步会翻车"。复杂工作流可以挂一个**技能包**（面板工作流卡片上点「技能包」按钮启用）：
+参数清单只能告诉 Agent「有哪些旋钮」，说不出「这个工作流适合什么、哪一步会翻车」。复杂工作流可以挂一个**技能包**（面板工作流卡片上点「技能包」按钮启用）：
 
-```
+```text
 <数据目录>/skills/<工作流>/
   SKILL.md          # 主文档：适用场景 / 关键参数 / 注意事项
   references/       # 参考文档：风格合集、排错记录
@@ -84,7 +84,7 @@ Agent 直接驱动 ComfyUI，无需手动操作画布：
 
 生成文件经同源路由（`/comfyui/media`）按文件名转发，不依赖 ComfyUI 内存态历史——重启或清空历史后旧结果照样能打开。浏览器不直接接触 ComfyUI：无 CORS、无混合内容、API Key 不下发。
 
-DH 设置页新增 "ComfyUI" 分区：服务器地址、API Key 环境变量名、启动命令与工作目录、本机 ComfyUI 目录、媒体访问地址、测试连接、界面语言切换，改完即生效，无需改 `cordis.yml`。
+DH 设置页新增「ComfyUI」分区：服务器地址、API Key 环境变量名、启动命令与工作目录、本机 ComfyUI 目录、媒体访问地址、测试连接、界面语言切换，改完即生效，无需改 `cordis.yml`。
 
 ## 安装
 
@@ -95,7 +95,7 @@ dsh plugin --profile web add dsh-maid-comfyui
 dsh plugin --profile desktop add dsh-maid-comfyui
 ```
 
-装完**重启应用即可**：侧边栏出现面板入口，设置页出现 "ComfyUI" 分区，Agent 立即获得全部工具与配套 skill。
+装完**重启应用即可**：侧边栏出现面板入口，设置页出现「ComfyUI」分区，Agent 立即获得全部工具与配套 skill。
 
 > **不用手改 profile**：安装器（`dsh plugin add` / 插件市场）会自己把依赖写进 `package.json`、把本包加进 `dsh.profile.bundles`，并应用包内的 bundle patch——宿主 `dsh-plugin-manager` 的 reconcile 步骤会收编每一个带 `dsh.bundle` 字段的新依赖。本机 ComfyUI 路径这类**机器特定值**走设置页（改完即生效，无需重启），不必写进 profile 的 `cordis.patch.yml`。
 
@@ -103,11 +103,11 @@ dsh plugin --profile desktop add dsh-maid-comfyui
 
 直接告诉 Agent，例如：
 
-- "用 ComfyUI 画一张红猫的图"
-- "把这幅图转成赛博朋克风格"
-- "把加载区这张动漫图转成真人照片，分辨率跟原图一致"
-- "生成一段 5 秒的短视频：日落下的城市"
-- "用我之前在 ComfyUI 里保存的 Krea-Afterlight 跑一下"（若该图还没提取，Agent 会转告你先去面板点**提取**）
+- 「用 ComfyUI 画一张红猫的图」
+- 「把这幅图转成赛博朋克风格」
+- 「把加载区这张动漫图转成真人照片，分辨率跟原图一致」
+- 「生成一段 5 秒的短视频：日落下的城市」
+- 「用我之前在 ComfyUI 里保存的 Krea-Afterlight 跑一下」（若该图还没提取，Agent 会转告你先去面板点**提取**）
 
 远程 ComfyUI 若位于需鉴权的代理之后，通过凭据存储或 `apiKeyEnv` 指定的环境变量（默认 `COMFYUI_API_KEY`）提供密钥，绝不发给浏览器。
 
@@ -155,7 +155,7 @@ node scripts/subgraph-to-api.mjs <画布工作流.json> [输出.json]
 ## 环境要求
 
 - DeepSeek Harness（`web` / `desktop` profile）
-- 一个运行中的 [ComfyUI](https://github.com/comfystack/ComfyUI) 服务器（默认 `http://127.0.0.1:8188`）
+- 一个运行中的 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 服务器（默认 `http://127.0.0.1:8188`）
 - `video` 模板需要 [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper) 与 Wan 2.1 模型
 
 ## License

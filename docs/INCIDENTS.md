@@ -22,7 +22,7 @@ owner.inject({ role: 'user', content: [...], source: {...} })   // 缺 id
 
 而 host 的 `agent.inject()` 契约要求**已具名消息**（`Message` 形状）：host 内部一律走 `createUserMessage()`（`@deepseek-ai/dsh-llm`），该 helper 补 `id: crypto.randomUUID()` 和 `role: 'user'`。插件绕过 helper 后，一条**没有 id 的 message 事件被写入会话日志**；加载时 `assertMessageEventShape`（packages/core/session/src/index.ts:301）全量校验撞上它，**整个会话拒绝加载**。
 
-证据：坏事件自带署名 `"source":{"kind":"plugin","plugin":"comfyui","form":"notice",...}`，正文就是 `echoCompletion` 里硬编码的中文通知文本；全日志 2238 条 message 事件仅此 1 条缺 id。
+证据：坏事件自带署名 `{"kind":"plugin","plugin":"comfyui","form":"notice",...}`，正文就是 `echoCompletion` 里硬编码的中文通知文本；全日志 2238 条 message 事件仅此 1 条缺 id。
 
 ## 修复
 
@@ -43,4 +43,4 @@ owner.inject({ role: 'user', content: [...], source: {...} })   // 缺 id
 - **任何写入会话日志 / 模型上下文的消息都必须符合 host 的 `Message` 契约**：`id`（非空字符串，UUID）+ `role` + `content` + `source` 四者齐全。能用 host 的 `createUserMessage()` 就用，不能就按同形状手工构造（含 `id`）。
 - 这类错误**编译期零提示**、运行期才暴露，且报错点离肇事点很远（一个炸在 boot，一个炸在几天后的历史加载）——看起来都像 harness 本身坏了。插件侧必须主动守契约。
 - 会话日志是 append-only 的持久化数据：**一条坏事件 = 整个会话报废**（校验失败拒绝加载），且修复要动已持久化文件（需停进程、备份、重压），代价极高。宁可注入失败也不写坏数据（`echoCompletion` 已用 try/catch 包裹，best-effort）。
-- 新增任何"向会话/模型注入内容"的代码路径后，必须用本检测脚本（`scripts/analyze-sessions.mjs`）复检会话日志。
+- 新增任何「向会话/模型注入内容」的代码路径后，必须用本检测脚本（`scripts/analyze-sessions.mjs`）复检会话日志。

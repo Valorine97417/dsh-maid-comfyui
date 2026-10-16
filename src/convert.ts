@@ -196,10 +196,11 @@ function resolveOutput(
   objectInfo: Record<string, unknown>,
   warnings: string[],
   dropReasons?: Map<string, string>,
+  visited?: Set<number>,
 ): [string, number] | unknown | 'missing' {
   const link = links.get(linkId)
   if (link === undefined) return 'missing'
-  return resolveOrigin(link[1], link[2], links, nodesById, objectInfo, warnings, dropReasons)
+  return resolveOrigin(link[1], link[2], links, nodesById, objectInfo, warnings, dropReasons, visited)
 }
 
 function resolveOrigin(
@@ -210,28 +211,44 @@ function resolveOrigin(
   objectInfo: Record<string, unknown>,
   warnings: string[],
   dropReasons?: Map<string, string>,
+  visited?: Set<number>,
 ): [string, number] | unknown | 'missing' {
   const node = nodesById.get(nodeId)
   if (node === undefined) return 'missing'
 
   // Reroute: the output mirrors the node's input.
   if (node.type === 'Reroute') {
+    // Cycle guard, same shape as resolveVirtualLinks in graph.ts: a canvas can
+    // wire Reroutes (or bypassed nodes) into a loop, and recursing without a
+    // visited set dies with a RangeError and a 500 on the extract route.
+    if (visited?.has(nodeId) === true) {
+      dropReasons?.set(`${nodeId}:${slot}`, `上游节点 ${node.type}（id ${nodeId}）的直通链形成环，已断开相关连线`)
+      return 'missing'
+    }
+    const seen = visited ?? new Set<number>()
+    seen.add(nodeId)
     const inputLink = (node.inputs ?? []).find((entry) => entry.link !== null)?.link
     if (inputLink === undefined || inputLink === null) {
       dropReasons?.set(`${nodeId}:${slot}`, `上游节点 ${node.type}（id ${nodeId}）的直通输入没有连接`)
       return 'missing'
     }
-    return resolveOutput(inputLink, links, nodesById, objectInfo, warnings, dropReasons)
+    return resolveOutput(inputLink, links, nodesById, objectInfo, warnings, dropReasons, seen)
   }
 
   // Bypassed nodes act as pass-throughs: the output follows the first wired input.
   if (node.mode === 4) {
+    if (visited?.has(nodeId) === true) {
+      dropReasons?.set(`${nodeId}:${slot}`, `上游节点 ${node.type}（id ${nodeId} 已绕过）的直通链形成环，已断开相关连线`)
+      return 'missing'
+    }
+    const seen = visited ?? new Set<number>()
+    seen.add(nodeId)
     const inputLink = (node.inputs ?? []).find((entry) => entry.link !== null)?.link
     if (inputLink === undefined || inputLink === null) {
       dropReasons?.set(`${nodeId}:${slot}`, `上游节点 ${node.type}（id ${nodeId} 已绕过）的直通输入没有连接`)
       return 'missing'
     }
-    return resolveOutput(inputLink, links, nodesById, objectInfo, warnings, dropReasons)
+    return resolveOutput(inputLink, links, nodesById, objectInfo, warnings, dropReasons, seen)
   }
 
   // Unregistered node types: a UI-only value source inlines its first widget;
@@ -343,7 +360,7 @@ export function convertGraphToApi(
     const inputs: Record<string, unknown> = {}
     for (const entry of node.inputs ?? []) {
       if (entry.link === undefined || entry.link === null) continue
-      const resolved = resolveOutput(entry.link, links, nodesById, objectInfo, warnings, dropReasons)
+      const resolved = resolveOutput(entry.link, links, nodesById, objectInfo, warnings, dropReasons, new Set())
       if (resolved !== 'missing') {
         inputs[entry.name] = resolved
       } else {

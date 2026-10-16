@@ -50,7 +50,7 @@ There is exactly one switch: the **`⏻` button in the panel's top-right corner*
 
 > For a launch with no console window at all, use the portable build's `python_embeded\pythonw.exe` instead of its `run_nvidia_gpu.bat`: that batch file ends in `pause`, and the console window `cmd` opens for it stays up.
 
-The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done (the turn ends), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. **There is no idle timer** — the plugin never stops a server merely for being quiet. To start or stop it by hand: the `⏻` button in the panel's top-right corner (the window the "ComfyUI Panel" header button opens) — it starts the server when it is down, and stops the one this plugin started (with a confirmation first); a ComfyUI you started yourself is never a target.
+The other direction is covered too: a ComfyUI **this plugin started** is stopped as soon as the work in the conversation is done (the turn ends), returning several GB of VRAM. A ComfyUI you started yourself is never stopped, and nothing is stopped while work is queued or running. **There is no idle timer** — the plugin never stops a server merely for being quiet. To start or stop it by hand: the `⏻` button in the panel's top-right corner (behavior as described above).
 
 **Opening the panel never starts ComfyUI** (earlier versions did; that is gone). A failed probe only shows a toast explaining the reason — press `⏻` in the panel header to start it.
 
@@ -155,7 +155,7 @@ Self-test: `node scripts/test-subgraph-to-api.mjs` (pure offline fixtures, no Co
 ## Requirements
 
 - DeepSeek Harness (`web` / `desktop` profile)
-- A running [ComfyUI](https://github.com/comfystack/ComfyUI) server (default `http://127.0.0.1:8188`)
+- A running [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server (default `http://127.0.0.1:8188`)
 - The `video` template needs [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper) and Wan 2.1 models
 
 ## License

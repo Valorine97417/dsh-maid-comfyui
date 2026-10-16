@@ -1,7 +1,7 @@
 # dsh-maid-comfyui 0.4.0 发布决策（已执行）
 
-**时间**: 2026-09-02 02:00 附近
-**状态**: 代码与清单已改完，待用户自行 npm publish
+**时间**：2026-09-02 02:00 附近
+**状态**：代码与清单已改完，待用户自行 npm publish
 
 ## 背景
 
@@ -11,7 +11,7 @@
 
 1. `package.json` 删除 `peerDependenciesMeta` 中 dsh-settings 的 `optional: true` → peer 必选。**这是关键一步**：dshmarket 兼容预检（compatibility.ts）对 optional peer 一律降级为非风险不报警，摘掉后老宿主上安装会触发 `soft-incompatible` 风险横幅 + 一键回滚。
 2. `package.json` peer 范围 `@deepseek-ai/dsh-settings: ^0.1.2-alpha.4`（保留 alpha 标签，覆盖未来 0.1.x 正式版）。
-3. 版本 `0.3.0-beta.6` → `0.4.0`（用户说"0.40"，按 semver 惯例落为 0.4.0，已告知可改字面 0.40.0）。
+3. 版本 `0.3.0-beta.6` → `0.4.0`（用户说「0.40」，按 semver 惯例落为 0.4.0，已告知可改字面 0.40.0）。
 4. README.md / README.en.md 徽章下各加一行显式要求：≥ 0.1.2-alpha.4，老 dsh 留 0.3.x 线。
 5. `pnpm typecheck` 双 tsconfig 通过；发布走 `npm publish`（prepack 自动 build）。
 

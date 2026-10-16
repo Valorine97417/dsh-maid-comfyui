@@ -17,7 +17,7 @@
 - **症状**：把新版插件装到老宿主机上，dsh 整体启动失败（宿主对插件 fail-loud，不隔离）；或插件市场出现 `soft-incompatible` 风险提示 + 一键回滚。
 - **原因**：`@deepseek-ai/dsh-settings` 是**必选 peer**（0.4.0 起摘掉 `peerDependenciesMeta` 的 `optional: true`），且 peer 范围只覆盖宿主 0.1.2 起的各条预发布线；老宿主（0.1.1）装 0.5.x 不满足 peer。
 - **解法**：配对安装——插件 **0.5.x（`latest`）↔ dsh ≥ 0.1.2**（含 0.1.5/0.1.6/0.1.7 预发布）；插件 **0.3.x（`beta`）↔ dsh 0.1.1**。命令 `dsh plugin --profile web add dsh-maid-comfyui`（老宿主加 `@beta`）。0.3.x 老线留在 npm 不撤，不做双版本 shim。
-- **验证**：重启后 `GET /comfyui/ping` 返回 200，侧栏出现「ComfyUI 面板」，设置页出现 "ComfyUI" 分区。
+- **验证**：重启后 `GET /comfyui/ping` 返回 200，侧栏出现「ComfyUI 面板」，设置页出现「ComfyUI」分区。
 
 ### 1.2 装完没变化：面板入口/设置页都不出现
 
@@ -72,7 +72,7 @@
 - **症状**：重启 web server 后某个历史会话**完全无法加载，整个会话报废**；日志里看不出跟 ComfyUI 有关。
 - **原因**：`echoCompletion()`（`src/tools.ts`）后台生成完成时向会话注入通知，早期传的是**裸对象字面量**（`owner.inject({ role: 'user', content, source })`，缺 `id`）。host 的 `agent.inject()` 要求**已具名消息**（内部一律走 `createUserMessage()`，该 helper 补 `id: crypto.randomUUID()` 与 `role: 'user'`）。绕过 helper 后一条没有 `id` 的 message 事件写进了 append-only 的会话日志，加载时 `assertMessageEventShape`（`packages/core/session/src/index.ts:301`）全量校验撞上它，**整个会话拒绝加载**。证据：坏事件署名 `"source":{"kind":"plugin","plugin":"comfyui","form":"notice",...}`，正文是 `echoCompletion` 里硬编码的中文通知；全日志 2238 条 message 事件仅此 1 条缺 id。
 - **解法**（代码已修，装新机不用处理，纪律要带过去）：注入消息补全 `id`（UUID）+ `role: 'user'` + `content` + `source` 完整形状，修复处带 CONTRACT 注释；**能用 host 的 `createUserMessage()` 就用**。数据侧损坏日志需重写修复（停进程、备份、重压），代价极高——所以 `echoCompletion` 已用 try/catch 包成 best-effort：**宁可注入失败也不写坏数据**。
-- **验证**：跑 `node scripts/analyze-sessions.mjs`（只读扫描，逐帧解压找缺 `id` 的 message 事件）。2026-08-20 全量复检：3 个日志（575 帧 / 30998 帧 / 9431 帧）missingId 全为 0。**新增任何"向会话/模型注入内容"的路径后必须重跑它。**
+- **验证**：跑 `node scripts/analyze-sessions.mjs`（只读扫描，逐帧解压找缺 `id` 的 message 事件）。2026-08-20 全量复检：3 个日志（575 帧 / 30998 帧 / 9431 帧）missingId 全为 0。**新增任何「向会话/模型注入内容」的路径后必须重跑它。**
 - **教训**：这类错误编译期零提示、运行期才暴露，报错点离肇事点极远（一个炸在 boot，一个炸在几天后的历史加载），看起来都像 harness 坏了——插件侧必须主动守契约。
 
 ---
@@ -144,13 +144,13 @@
 ### 3.1 提示「非 API 流程，无法直接执行」
 
 - **症状**：面板/`list` 里看得见 ComfyUI 端保存的工作流但不能运行；该图 `extracted: false`。
-- **原因**：本插件有两个「工作流主题」——**图工作流（衍生主题）**是 ComfyUI 端保存的画布 UI 图（nodes/links/widgets），是"源"，**不能直接运行**；**API 工作流（运行主题）**是 API 格式 prompt（node id → `{ class_type, inputs }`），是"运行单元"。
+- **原因**：本插件有两个「工作流主题」——**图工作流（衍生主题）**是 ComfyUI 端保存的画布 UI 图（nodes/links/widgets），是「源」，**不能直接运行**；**API 工作流（运行主题）**是 API 格式 prompt（node id → `{ class_type, inputs }`），是「运行单元」。
 - **解法**：图 → API 两条路：① 面板点**提取**（`analyzeGraph` → `convertGraphToApi` → `analyzeWorkflowParameters` → `store.saveWorkflow`）；② 直接把 API JSON 粘进「新建工作流」或 POST 入库（`POST /comfyui/workflows`，**origin 头必带**）。图未提取时 Agent 应转告用户去面板点提取，而不是试图运行图本身。
 - **验证**：提取出的工作流能被 `run` 起来；插件对提取产物先做一次 `POST /prompt` 校验，`nodeErrors` 必须为空。
 
 ### 3.2 提取报「包含未注册的 UI-only 节点 "<一串 UUID>"」
 
-- **症状**：面板点提取失败，报错里的节点类型是一串 UUID；用户常误以为"模型路径没适配好"。
+- **症状**：面板点提取失败，报错里的节点类型是一串 UUID；用户常误以为「模型路径没适配好」。
 - **原因**：新版 ComfyUI 画布可把整段流程收进**子图（subgraph）**，存盘后顶层只剩一个 type 等于子图 UUID 的实例节点；分析器把子图当黑盒（`src/convert.ts:336/340`）按未注册拒掉。**这不是模型路径问题**——先看报错发生在**提取阶段**还是**执行阶段**，别顺着猜测走。
 - **解法**：① 在 ComfyUI 里右键子图 → `Unpack` 展开，保存后再提取；② 用仓库自带离线转换器（脚本随**源码仓库**分发，不在 npm 包 `files` 白名单里，要 clone 后用）：
   ```bash
@@ -173,8 +173,8 @@
 ### 3.4 提取成功但一提交就 KeyError / 输入错位
 
 - **症状**：转换成功，`POST /prompt` 阶段报错。
-- **原因**（三个高频）：① **节点引用写成了数字**——API prompt 里必须 `[String(nodeId), slot]`，服务端按字符串键做字典查找（`execution.py` `validate_inputs`），数字引用 KeyError；② **`widgets_values` 顺序错位**——图节点自身 `inputs` 数组才是 widget 顺序（含动态子 widget，**被链接的 widget 仍占一格**），名为 `seed`/`noise_seed` 的 INT 前端渲染「生成后控制」下拉，**占一格但无 API 输入**，提取时消费该值但不写入，否则后续 widget 全部错位（典型：TTS-Audio-Suite 的 seed 后跟的 `"fixed"` 被当参数），`forceInput` 的 widget 不占格，只存在于画布上的前端节点（`MarkdownNote`、`ImageCompare`）按 `object_info` 有无前端专属输入类型识别并跳过；③ **输出槽位越界**（保存图声称 2 个输出、服务端只有 1 个）→ 断开该引用并警告，**必需输入缺失**（required 里没有且非 lazy/template）→ 明确报错，不产出"能转但跑不起来"的工作流。
-- **解法**：按上述三条对齐；`COMFY_AUTOGROW_V3`/带 `template`/带 `lazy` 的输入豁免必需性检查。参数写回要区分「没传」与「传了空值」：空默认值（`default: ''`）在未显式传值时必须跳过**连线输入上的高级参数**与**加载参数**（否则冲掉连线/清空文件名，运行直接失败），唯一例外是 `upload: 'media'` 参考位，空值语义就是"移除该位"。
+- **原因**（三个高频）：① **节点引用写成了数字**——API prompt 里必须 `[String(nodeId), slot]`，服务端按字符串键做字典查找（`execution.py` `validate_inputs`），数字引用 KeyError；② **`widgets_values` 顺序错位**——图节点自身 `inputs` 数组才是 widget 顺序（含动态子 widget，**被链接的 widget 仍占一格**），名为 `seed`/`noise_seed` 的 INT 前端渲染「生成后控制」下拉，**占一格但无 API 输入**，提取时消费该值但不写入，否则后续 widget 全部错位（典型：TTS-Audio-Suite 的 seed 后跟的 `"fixed"` 被当参数），`forceInput` 的 widget 不占格，只存在于画布上的前端节点（`MarkdownNote`、`ImageCompare`）按 `object_info` 有无前端专属输入类型识别并跳过；③ **输出槽位越界**（保存图声称 2 个输出、服务端只有 1 个）→ 断开该引用并警告，**必需输入缺失**（required 里没有且非 lazy/template）→ 明确报错，不产出「能转但跑不起来」的工作流。
+- **解法**：按上述三条对齐；`COMFY_AUTOGROW_V3`/带 `template`/带 `lazy` 的输入豁免必需性检查。参数写回要区分「没传」与「传了空值」：空默认值（`default: ''`）在未显式传值时必须跳过**连线输入上的高级参数**与**加载参数**（否则冲掉连线/清空文件名，运行直接失败），唯一例外是 `upload: 'media'` 参考位，空值语义就是「移除该位」。
 - **验证**：提取后先用 `POST /prompt` 校验 `nodeErrors` 为空；产物另做引用完整性检查（所有 `[id, slot]` 必须指向同一产物内的节点）。
 
 ### 3.5 DynamicCombo V3 被包成嵌套结构 → 节点 execute 才报缺参数
@@ -201,7 +201,7 @@
 ### 3.8 技能包相关：报「没有技能包」或被「运行前必读」拦住
 
 - **症状**：`comfyui_skill read` 报「工作流 "X" 没有技能包」；或 `comfyui_workflow action: run` 失败提示先读技能包。
-- **原因**：① 没挂技能包时，除 `enable` 外的动作都报"没有技能包"（创建只有 `enable` 一条路）；② 用户勾了「运行前必读」——它**只拦 `action: run` 这一条路径**，`list`/`skill`/`get`/`refresh` 不受影响；拦截粒度是**会话 × 工作流**，读过一次（`action: skill` 或 `comfyui_skill read` 读到 `SKILL.md`）即解除，**换会话会重新拦**。
+- **原因**：① 没挂技能包时，除 `enable` 外的动作都报「没有技能包」（创建只有 `enable` 一条路）；② 用户勾了「运行前必读」——它**只拦 `action: run` 这一条路径**，`list`/`skill`/`get`/`refresh` 不受影响；拦截粒度是**会话 × 工作流**，读过一次（`action: skill` 或 `comfyui_skill read` 读到 `SKILL.md`）即解除，**换会话会重新拦**。
 - **解法**：报错里会指明先跑 `comfyui_workflow action: skill { id }`；建技能包用 `comfyui_skill action: enable`（建目录 + 骨架 `SKILL.md`，自动列出全部可调参数名占位），往里 `append`，别整体覆盖骨架。
 - **验证**：读完再 run 通过；`list` 里该行显示「技能包（运行前必读）」。
 - **别做的事**：**不要把技能包改成 `ctx.skills.register`**（契约 12）——宿主 skill 目录会把每个 model-invocable skill 无条件写进常驻消息，几十个工作流就变成每轮请求都在收费。按需披露阶梯挂在 `comfyui_workflow` 上。
@@ -209,7 +209,7 @@
 ### 3.9 工作流接线本身的问题（出纯噪声 / 参考图不生效）
 
 - **症状**：跑完不报错但出纯噪声；或图像编辑的参考图完全不生效（照着提示词另画一张）。
-- **原因**（实机踩过，2026-10-14）：① **选错文本编码器**——`pe_*_w4a8` 那两份不是主线文本编码器（属"提示词重写"分支），主线要 `qwen3vl_8b_nvfp4` + `type='qwen_image'`，接错照样跑完、出纯噪声；② **多加节点**——别加 `ModelSamplingAuraFlow`（官方 t2i 子图里没有），加了同样出纯噪声；③ **参考图写成数组**——图像编辑参考图在 API 格式里必须是**对象** `images: { image_0: ["6", 0] }`（自动增长复合输入 `COMFY_AUTOGROW_V3`），写成 `[["6",0]]` 不报错但参考图完全不生效；④ 官方模板的真实节点常藏在 **subgraph** 里（顶层只有 ResolutionSelector + 子图 + SaveImageAdvanced + MarkdownNote），要读 `definitions.subgraphs` 才看得到接线——照官方模板接，别凭想象接。
+- **原因**（实机踩过，2026-10-14）：① **选错文本编码器**——`pe_*_w4a8` 那两份不是主线文本编码器（属「提示词重写」分支），主线要 `qwen3vl_8b_nvfp4` + `type='qwen_image'`，接错照样跑完、出纯噪声；② **多加节点**——别加 `ModelSamplingAuraFlow`（官方 t2i 子图里没有），加了同样出纯噪声；③ **参考图写成数组**——图像编辑参考图在 API 格式里必须是**对象** `images: { image_0: ["6", 0] }`（自动增长复合输入 `COMFY_AUTOGROW_V3`），写成 `[["6",0]]` 不报错但参考图完全不生效；④ 官方模板的真实节点常藏在 **subgraph** 里（顶层只有 ResolutionSelector + 子图 + SaveImageAdvanced + MarkdownNote），要读 `definitions.subgraphs` 才看得到接线——照官方模板接，别凭想象接。
 - **验证**：出图不是噪声、参考图构图被保持。
 
 ---
@@ -233,14 +233,14 @@
 ### 4.3 后台任务卡片报「后台任务状态收集失败（已重试 n 次）」
 
 - **症状**：异步任务卡片长时间卡在收集状态并最终报失败。
-- **原因**：`GET /comfyui/jobs/media` 查 `/history`，没有记录时靠 `/queue` 区分 `queued`（仍在排队）与 `unknown`（已被清掉）（`src/routes.ts:1547`）；早期不区分，长队列被误判成"任务没了"。
+- **原因**：`GET /comfyui/jobs/media` 查 `/history`，没有记录时靠 `/queue` 区分 `queued`（仍在排队）与 `unknown`（已被清掉）（`src/routes.ts:1547`）；早期不区分，长队列被误判成「任务没了」。
 - **解法**：卡片只对 `unknown` 计超时，并尝试从资产索引恢复结果（历史被清也能救回）。长队列**耐心等**，反复重跑会真的重复占用显卡。
 - **验证**：排队中的卡片保持轮询、不报超时；完成后出图。
 
 ### 4.4 队列页读不出来 / 任务状态不刷新
 
 - **症状**：队列页报「无法读取队列（ComfyUI 未运行？）」；重启 DSH 后面板里旧任务没了。
-- **原因**：数据来自 ComfyUI 的 `/queue`、`/history`；`QueueTracker.sweep()` 是**"读时清扫"**——没有后台定时器，只在读 assets/queue 路由时把已完成的运行归档进资产索引（契约 4：不留裸定时器）。插件只记**本插件提交过**的 prompt（`tracked.json`）。
+- **原因**：数据来自 ComfyUI 的 `/queue`、`/history`；`QueueTracker.sweep()` 是**「读时清扫」**——没有后台定时器，只在读 assets/queue 路由时把已完成的运行归档进资产索引（契约 4：不留裸定时器）。插件只记**本插件提交过**的 prompt（`tracked.json`）。
 - **解法**：先确认 ComfyUI 在跑（2.1）；任务历史以 ComfyUI 自己为准。
 - **验证**：队列页显示运行中 + 历史，插件提交的任务带进度条。
 
@@ -282,7 +282,7 @@
 | `media-sizes.json` | 上传图像素尺寸 | 尺寸自动匹配失效 |
 | `media-hashes.json` | 内容哈希 → 文件名（去重） | 重复上传会重存 |
 | `tracked.json` | 本插件提交过的任务 | 队列页看不到插件任务 |
-| `launched.json` | "这个 ComfyUI 是本插件拉的"打标 | 关停闸门失灵（宁可留着也不误杀） |
+| `launched.json` | 「这个 ComfyUI 是本插件拉的」打标 | 关停闸门失灵（宁可留着也不误杀） |
 | `skills/<slug>/` | 各工作流技能包（`SKILL.md` + 一层子目录） | 说明书丢失，**没有别的副本** |
 
 `skillsDir` 可把技能包整棵树挪到别的盘/同步盘/版本库，**必须绝对路径**（相对值忽略）；它是运行时 getter 现读，设置页改完即生效，但**不会自动搬走已有目录**。
@@ -305,11 +305,11 @@
 
 ### 5.4 客户端界面落点（换主题/换机后常见的观感问题）
 
-- **面板透明**：底色固定为 `var(--dsc-panel-surface, #121f41)`（`src/client/styles.ts`）。早期取主题变量 `--dsw-alias-bg-layer-2`，某些皮肤把它压到很低透明度，视频背景直接透上来。**写死色值必须逐字核对**——曾把 `#121f41` 写成 `#121f43`，用户照旧反馈"还是透明"。改的是客户端文件，`build:client` 后**刷新页面即生效**。
+- **面板透明**：底色固定为 `var(--dsc-panel-surface, #121f41)`（`src/client/styles.ts`）。早期取主题变量 `--dsw-alias-bg-layer-2`，某些皮肤把它压到很低透明度，视频背景直接透上来。**写死色值必须逐字核对**——曾把 `#121f41` 写成 `#121f43`，用户照旧反馈「还是透明」。改的是客户端文件，`build:client` 后**刷新页面即生效**。
 - **顶部浮层点不动（2026-10-15 报障）**：宿主 Windows Electron 外框有一条 caption 高度的伪元素（`.BynINW_frame:before`）铺着 `-webkit-app-region: drag`，而宿主只在 macOS 分支给 `button/a/input` 隐式 `no-drag`。后果：连接提醒条写死 `top: 14px` 正好落在标题栏条带里，**整条 toast 上的点击（包括关闭 ✕）全被当成拖窗口吞掉，弹窗关不掉**。规矩：所有插件浮层（`.dsc-conn-toast` / `.dsc-panel` / `.dsc-picker-overlay` / `.dsc-lightbox`）显式写 `-webkit-app-region: no-drag`（toast 再补 `.dsc-conn-toast *` 覆盖子元素）；顶部定位用 `top: var(--dsh-frame-overlay-top, 14px)`，**不要写死像素**。
 - 面板几何信息存 localStorage；标题栏 `↺` 复位位置与大小并清 localStorage（换显示器后位置跑到屏幕外时用它）。
 
-### 5.5 技能包与预设包的尺寸上限（导入"假死"时先看这里）
+### 5.5 技能包与预设包的尺寸上限（导入「假死」时先看这里）
 
 - 技能包尺寸按**文件类型**限制：文本 256KB、二进制（`ASSET_EXTENSIONS`）4MB、每包 **20MB / 2000 文件**；单次 `comfyui_skill read` 超过 **40k 字符**截断。
 - 预设导入大包（上千文件）时逐文件写会退化成 O(n²) 文件系统调用，表现为**导入假死数分钟**——已知代价，`applyImportPackage` 已做批量写与一次限额检查。
@@ -321,7 +321,7 @@
 
 ### 6.1 先分阶段，再定位（最重要的一条经验）
 
-报错发生在**提取阶段**还是**执行阶段**，决定完全不同的排查方向。实例：看到「包含未注册的 UI-only 节点 "<uuid>"」时顺着"模型路径没适配"猜，方向完全错了——真因是子图（3.2）。同理"工作流跑不起来"要先分清是画布图（没提取）、参数（快照过期），还是 ComfyUI 端（模型/节点缺失）。
+报错发生在**提取阶段**还是**执行阶段**，决定完全不同的排查方向。实例：看到「包含未注册的 UI-only 节点 "<uuid>"」时顺着「模型路径没适配」猜，方向完全错了——真因是子图（3.2）。同理「工作流跑不起来」要先分清是画布图（没提取）、参数（快照过期），还是 ComfyUI 端（模型/节点缺失）。
 
 ### 6.2 探活与连线三连
 
@@ -354,7 +354,7 @@ node scripts/test-host-compat.mjs     # 宿主兼容缝（需先 build:host）
 ```
 真机冒烟：`node scripts/run-cg-portrait.mjs` / `run-16x9.mjs`（需 DSH + ComfyUI 都在运行）。
 
-### 6.5 会话日志检测（动过"注入消息"就必须跑）
+### 6.5 会话日志检测（动过「注入消息」就必须跑）
 
 ```sh
 node scripts/analyze-sessions.mjs    # 只读扫描，逐帧解压找缺 id 的 message 事件

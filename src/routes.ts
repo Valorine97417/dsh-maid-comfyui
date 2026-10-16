@@ -6,7 +6,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { errorMessage, readJsonBody, readRawBody, sameOrigin, sendJson } from './http.js'
+import { PayloadTooLargeError, errorMessage, readJsonBody, readRawBody, sameOrigin, sendJson } from './http.js'
 import type { ComfyUIRuntime } from './tools.js'
 import { analyzeWorkflowParameters, comboChildInfo, inputOptions, numberSpecOf, refreshParameterMetadata, uploadKindOf, type Workflow } from './params.js'
 import { collectMedia, historyErrorMessage, mediaProxyUrl, type ComfyUIMediaRef } from './comfyui.js'
@@ -700,6 +700,13 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
         sendJson(response, 405, { error: 'method not allowed' })
         return
       }
+      // Same-origin like every other write route: a cross-origin page can
+      // otherwise POST a multipart form here (CSRF) and drop a file into the
+      // ComfyUI input directory without the browser noticing.
+      if (!sameOrigin(request)) {
+        sendJson(response, 403, { error: 'forbidden: same-origin requests only' })
+        return
+      }
       const contentType = request.headers['content-type'] ?? ''
       if (!contentType.startsWith('multipart/form-data')) {
         sendJson(response, 400, { error: 'multipart/form-data required' })
@@ -929,7 +936,7 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
         return
       }
       try {
-        const raw = await readRawBody(request)
+        const raw = await readRawBody(request, MAX_ASSET_BYTES)
         if (raw.length === 0) {
           sendJson(response, 200, { ok: false, error: '文件为空' })
           return
@@ -945,6 +952,13 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
           ? { ok: true, enabled: true, path: result.value.path, pack: result.value.pack }
           : { ok: false, error: result.error })
       } catch (error) {
+        // The mid-read cap aborts buffering before memory dies and throws the
+        // same size message the post-read check owns, so the panel sees one
+        // error either way.
+        if (error instanceof PayloadTooLargeError) {
+          sendJson(response, 200, { ok: false, error: `单个文件不能超过 ${Math.floor(MAX_ASSET_BYTES / 1024 / 1024)} MB` })
+          return
+        }
         sendJson(response, 200, { ok: false, error: errorMessage(error) })
       }
     }),
@@ -1186,7 +1200,18 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
         sendJson(response, 403, { error: 'forbidden: same-origin requests only' })
         return
       }
-      const raw = await readRawBody(request)
+      let raw: Buffer
+      try {
+        raw = await readRawBody(request, MAX_IMPORT_BYTES)
+      } catch (error) {
+        // The mid-read cap aborts buffering before memory dies; answer with
+        // the same 413 the post-read check below keeps for bounded bodies.
+        if (error instanceof PayloadTooLargeError) {
+          sendJson(response, 413, { error: `预设包不能超过 ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB` })
+          return
+        }
+        throw error
+      }
       if (raw.length > MAX_IMPORT_BYTES) {
         sendJson(response, 413, { error: `预设包不能超过 ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB` })
         return
@@ -1217,7 +1242,18 @@ export function mountComfyUIRoutes(ctx: Context, runtime: ComfyUIRuntime): (() =
         .split(',')
         .map((part) => Number.parseInt(part, 10))
         .filter((index) => Number.isInteger(index) && index >= 0)
-      const raw = await readRawBody(request)
+      let raw: Buffer
+      try {
+        raw = await readRawBody(request, MAX_IMPORT_BYTES)
+      } catch (error) {
+        // Same mid-read cap as import/analyze; the post-read check below stays
+        // for bodies that arrive within the cap's accounting window.
+        if (error instanceof PayloadTooLargeError) {
+          sendJson(response, 413, { error: `预设包不能超过 ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB` })
+          return
+        }
+        throw error
+      }
       if (raw.length > MAX_IMPORT_BYTES) {
         sendJson(response, 413, { error: `预设包不能超过 ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB` })
         return
