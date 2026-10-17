@@ -210,6 +210,7 @@
 
 - **症状**：跑完不报错但出纯噪声；或图像编辑的参考图完全不生效（照着提示词另画一张）。
 - **原因**（实机踩过，2026-10-14）：① **选错文本编码器**——`pe_*_w4a8` 那两份不是主线文本编码器（属「提示词重写」分支），主线要 `qwen3vl_8b_nvfp4` + `type='qwen_image'`，接错照样跑完、出纯噪声；② **多加节点**——别加 `ModelSamplingAuraFlow`（官方 t2i 子图里没有），加了同样出纯噪声；③ **参考图写成数组**——图像编辑参考图在 API 格式里必须是**对象** `images: { image_0: ["6", 0] }`（自动增长复合输入 `COMFY_AUTOGROW_V3`），写成 `[["6",0]]` 不报错但参考图完全不生效；④ 官方模板的真实节点常藏在 **subgraph** 里（顶层只有 ResolutionSelector + 子图 + SaveImageAdvanced + MarkdownNote），要读 `definitions.subgraphs` 才看得到接线——照官方模板接，别凭想象接。
+- **解法**：① 文本编码器认准 `qwen3vl_8b_nvfp4` + `type='qwen_image'`，`pe_*_w4a8` 一律不选；② 节点表里见到 `ModelSamplingAuraFlow` 就删掉；③ 参考图改成对象写法 `images: { image_0: ["6", 0] }`；④ 接线一律照官方模板 `definitions.subgraphs` 抄，别凭界面想象接。
 - **验证**：出图不是噪声、参考图构图被保持。
 
 ---
