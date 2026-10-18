@@ -101,6 +101,11 @@
   代码锚点：`findListeningPids()`（`src/idle.ts:106`，win32 解析 `netstat -ano -p TCP` 的 `LISTENING` 行尾 PID，其他平台走 `lsof`）、`killProcessTree()`（`src/idle.ts:128`）。`armed` 由一次成功拉起置位，并从 `<dataDir>/launched.json` 跨宿主重启恢复——**没 `armed` 就绝不动手**。
 - **验证**：拉起后 `GET /system_stats` 有响应且**没有**残留控制台窗口；关停时先探端口 → 按端口反查 PID → `taskkill /PID <pid> /T /F`。
 
+- **补充（2026-10-15，启停口收成一个）**：连接失败提醒条上曾经有**第二个**「启动本地 ComfyUI」按钮。老大当天追问原话「没弄好启动关闭comfyui都由⏻管吗」，指出同一个「启动/关闭」决定出现了两个入口；该按钮随即删除，提醒条只报原因并指路 ⏻。删它的理由不是「多余」，而是**两处能启动同一个东西，用户就会怀疑另一处是不是坏了**——尤其当提醒条先一步把服务器拉起来时，面板头部的 ⏻ 看起来就像失灵。
+- **代码侧规约仍在（本机实测核对）**：`src/client/connection.tsx:13-17` 块注释原文——"The toast reports; it does not act. Starting and stopping the server lives behind exactly one switch, the panel header's power button. An earlier version carried its own \"start local ComfyUI\" button, which gave the same decision two entry points and made the panel's button look broken whenever the toast had already brought the server up."；`:108-110` 同义（"Opening the panel never starts ComfyUI … the panel header's power button is the one place that starts it"）。现役提醒条上只剩**一个**按钮：右上角关闭 ✕（`onClick: dismissConnectionToast`，`:182-185`）。
+- **证据强度说明**：删除动作本身只有记忆与代码注释两侧佐证。记忆记录的提交号 `53b5535` 在**本仓历史中未取证到**——当前仓 `git log --all` 共 3 笔提交（`87b215c` docs: 补录事故条目 2026-10-18 / `e5f5d8a` docs: 同步 TROUBLESHOOTING.md 2026-10-17 / `fc6d525` chore(health) 2026-10-17），`git show 53b5535` 返回 `fatal: ambiguous argument '53b5535': unknown revision or path not in the working tree.`。所以不要写「已核对某次提交」。
+- **教训**：这是「同一个决定只能有一个入口」的第二例（第一例是同一天收回的「打开面板自动拉起 + 空闲 30 分钟兜底关」，见 §2.1 附注与 §4.5）。做「体贴的自动行为」时别叠多层，手动入口同样只能留一个。
+
 ### 2.3 挂在反代后面时裸路由 404（只转发 `/api/*` 的代理）
 
 - **症状**：ComfyUI 本身能开，但插件探活/队列全失败，直连 `/system_stats` 404。
