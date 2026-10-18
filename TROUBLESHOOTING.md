@@ -93,6 +93,12 @@
 - **原因**：便携版那个 bat 结尾有 `pause`，且由 `cmd` 拉起的控制台不会自己消失；`launch.ts` 虽是 `spawn(command, { shell: true, detached: true, stdio: 'ignore', windowsHide: true })`，也管不了 bat 自己拉的控制台。另外 `POLL_TIMEOUT_MS = 90_000`（1 秒探一次，最多 90 秒），同一失败有 `FAIL_COOLDOWN_MS = 10_000` 冷却，冷却内重复点击回放同一条错误。
 - **解法**：启动命令改用便携版 pythonw，去掉窗口：
   `D:\ComfyUI_windows_portable\python_embeded\pythonw.exe -s ComfyUI\main.py --windows-standalone-build`，`launchDir` 填便携版根目录。`launchCommand` 留空时 `⏻` 只能关不能开，接口返回 `launch-not-configured`。`launch` 路由**只在本机 baseUrl 下开放**（`canLaunch` 为假时面板不显示按钮），会写 `ctx.logger.info` 审计日志。
+- **关停的四条硬约束**（`src/idle.ts:16-33` 头注释原文，动手改关停逻辑前先读；2026-10-18 复核代码确认仍成立）：
+  1. **只有 loopback 上的 `baseUrl` 才算「本机自己拉起的」**——"Only a loopback `baseUrl` qualifies. A server on another machine is not ours to kill, and its port would resolve to nothing local anyway." 远端 ComfyUI 一律不关。
+  2. **有活在飞就绝不关**——"Never while work is in flight: the caller supplies `busy()`, which reports the ComfyUI queue (running + pending) and the plugin's tracked runs. A shutdown that lands mid-generation would destroy the user's image." 队列未排空时，关停请求只是被记住，按 `PENDING_TICK_MS = 5_000`（`src/idle.ts:42`）重试到队列清空，不是排队下发。
+  3. **PID 必须在关停那刻从监听端口反查，绝不缓存**——"The PID is resolved from the listening port at shutdown time, never cached: a `.bat` launcher exits immediately, so the pid we spawned is not the server's pid." 拿 `spawn()` 的 pid 去杀，杀的是 bat 外壳（它早就退了），真正的 `python.exe` 还活着。
+  4. **ComfyUI 0.39 没有「退出」路由**——"ComfyUI 0.39 exposes no \"quit\" route (only `/interrupt` and `/free`)"，所以只能杀进程树：win32 用 `taskkill /PID <pid> /T /F`，否则 `bat → python` 的后代进程留着不下来。
+  代码锚点：`findListeningPids()`（`src/idle.ts:106`，win32 解析 `netstat -ano -p TCP` 的 `LISTENING` 行尾 PID，其他平台走 `lsof`）、`killProcessTree()`（`src/idle.ts:128`）。`armed` 由一次成功拉起置位，并从 `<dataDir>/launched.json` 跨宿主重启恢复——**没 `armed` 就绝不动手**。
 - **验证**：拉起后 `GET /system_stats` 有响应且**没有**残留控制台窗口；关停时先探端口 → 按端口反查 PID → `taskkill /PID <pid> /T /F`。
 
 ### 2.3 挂在反代后面时裸路由 404（只转发 `/api/*` 的代理）
@@ -122,6 +128,8 @@
 - **原因**：① 早期实现按 prompt/node/index 拼链接、依赖 `/history`——**history 是内存态**，ComfyUI 重启或用户点「清空历史」就没了（契约 7）；② 桌面端 GUI 跑在 `dsh-app://` 自定义协议下**完全禁网**，写死 `http://127.0.0.1:8188/...` 的外链静默失败。
 - **解法**：媒体一律**按文件寻址**：`/comfyui/media?file=<文件名>&subfolder=<子目录>&type=output`（同源代理 `src/proxy.ts`），按 `file+subfolder+type` 直取、不依赖 history，重启/清空历史后旧结果照样能打开；历史里的旧链接由 `/comfyui/assets`、`/comfyui/loadarea` 的 `healAssetUrls` 与代理的资产索引回落救回。远端浏览器访问时填 `mediaHost`（留空则按浏览器实际访问的 Host 推，回环 origin 不覆盖已知外部 origin）。VCP 卡片配图只能走这个同源路由，`src` 写相对路径。
 - **验证**：`curl "http://127.0.0.1:19387/comfyui/media?file=<文件名>&type=output"` 返回 200 与图片字节；音频/视频拖动进度条正常（代理转发 Range，206 直通）。
+- **根因（补记）**：媒体链接是按 **prompt / node / index** 拼出来的，落点在 ComfyUI 的 `/history` 上；而 `history` 是**内存态**——ComfyUI 一重启、或用户点一次「清空历史」，映射表就没了，之前生成的所有链接集体 404，可**文件其实还在 output 目录里**。面板那句「源文件已被 ComfyUI 清理」是这句话在骗人：清理的不是文件，是索引。
+- **修法（补记）**：媒体 URL 必须**按文件寻址**，只用 `file` + `subfolder` + `type` 三个参数，不掺 prompt/node/index。`collectMedia` 统一走 `mediaProxyUrl`；历史记录里已经存下来的旧链接，由 `/comfyui/assets`、`/comfyui/loadarea` 的 `healAssetUrls` 与代理侧的资产索引回落救回——不需要用户重跑一遍工作流。
 
 ### 2.7 重启后工作流库/技能包全空
 
@@ -136,6 +144,16 @@
 - **原因**：`comfyuiDirs` 默认空数组，插件不知道安装位置（可能还有目录映射/多实例/便携版）。
 - **解法**：设置页「ComfyUI 目录」填绝对路径，**可填多条**。Agent 每次 `comfyui_workflow list` 都能读到 `env.baseUrl` 与 `env.comfyuiDirs`（现读，改完即生效），据此定位 models、自定义节点、TTS 音色库、输出目录；映射了额外模型目录的还要算上 `extra_model_paths.yaml`。
 - **验证**：改完配置不重启，`list` 的 `env.comfyuiDirs` 立刻是新值。
+
+### 2.9 连接提醒条写死 `top: 14px`，整条 toast 的点击（含关闭 ✕）被当成拖窗口吞掉
+
+- **症状**：会话头部点「ComfyUI 面板」后弹出顶部提醒条，但它**整条点不动**——包括右上角那个关闭 ✕，点了没反应，弹窗关不掉，只能刷新页面。2026-10-15 老大实测报障。
+- **原因**：提醒条写死 `top: 14px`，正好落在宿主 Windows Electron 外框的标题栏条带里。宿主那一层有一条 caption 高度的伪元素（`.BynINW_frame:before`）铺着 `-webkit-app-region: drag`，而宿主**只在 macOS 分支**给 `button` / `a` / `input` 等隐式加 `no-drag`，Windows 下没有这段兜底——于是拖拽区把整条 toast 上的点击全接管了。
+- **解法**：
+  1. 所有插件浮层显式写 `-webkit-app-region: no-drag`：`.dsc-conn-toast`、`.dsc-panel`、`.dsc-picker-overlay`、`.dsc-lightbox`；toast 再补一条 `.dsc-conn-toast *` 覆盖到子元素（只写父级漏子级，点按钮仍被吞）。
+  2. 顶部定位改用变量 `top: var(--dsh-frame-overlay-top, 14px)`，别把 14px 写死——宿主换外框高度时插件不跟着改就又落回条带里。
+- **验证**：未验：本轮只取到「2026-10-15 老大报障」这一侧的现象记录，没有修后复测存档（未记录「点击关闭 ✕ 是否恢复」）。落地前须在 Windows 桌面端实测一次：打开提醒条 → 点关闭 ✕ 能关 → 点条内任意文字不触发窗口拖动。
+- 来源：`D:\Works By DSH\dsh-maid-comfyui\CLAUDE.md:141`。
 
 ---
 
@@ -390,3 +408,15 @@ node -e "console.log(require('node:zlib').zstdDecompressSync(require('fs').readF
 | `not one of the allowed options` / 参数不生效 / 必读拦截 | 3.6–3.8 |
 | `generation aborted` / 超时 / 后台任务收集失败 / 显存 / 进度条 | 4.1–4.7 |
 | 面板透明 / 顶部浮层点不动 / 导入假死 | 5.4、5.5 |
+
+### 6.8 两台机器对同一段活各打了一个同名 tag，fetch 被拒
+
+- **症状**：公司机与家里机在各自分支上把同一版工作流封了同一个版本号（`v0.5.4`），先后推送后 `git fetch --tags` 报 `! [rejected]        v0.5.4 -> v0.5.4  (would clobber existing tag)`，本地 tag 推不上去，`git describe` 在两台机器上给出不同的提交。
+- **原因**：打 tag 之前没有比对远端同名 tag。两台机器各自把「当前 HEAD」当成了同一个版本号，而两边的 HEAD 并不是同一个提交；git 默认拒绝用本地 tag 覆盖同名远端 tag，于是 fetch 阶段就中止，而不是推到远端才失败。tag 指向的提交不同（家里机那一轮 `72c498a`，公司机那一轮 `a4019e2`）之后，`git describe` 与版本号引用就失去了唯一性。
+- **解法**：先取证再决定，别直接重打：
+  1. 逐条比对——`git rev-parse 'vX.Y.Z^{commit}'` 与 `git ls-remote --tags <remote> 'refs/tags/vX.Y.Z'`，把同名 tag 在两台机器上指向的 SHA 列成表；
+  2. 确认哪一边是「该版本真正的内容」以后，**由老大拍板**保留哪一边（本次决策是保留家里机那一轮、以远端为准），再 `git push origin --tags --force`（2026-10-16 处置，远端 `v0.5.4` 由 `72c498a` 改为 `a4019e2`）；
+  3. 另一台机器下次同步时先 `git fetch --tags` 再 `git tag -f vX.Y.Z <正确提交>`，不要靠删 tag 重建。
+- **验证**：`git ls-remote --tags origin` 与两台机器的 `git rev-parse 'v0.5.4^{commit}'` 三处 SHA 一致；`git fetch --tags` 不再出现 `would clobber existing tag`。
+- 证据：记忆 `0mvaxbrdr-aa6b2a2000f14bf0819b207597`（2026-10-16 结案）；复验日期 2026-10-18。
+- **教训**：版本号是全局命名空间，不是本地动作。打 tag 前先 `git ls-remote --tags` 看一眼远端有没有同名，比事后 `--force` 便宜得多。
