@@ -390,6 +390,11 @@ node -e "console.log(require('node:zlib').zstdDecompressSync(require('fs').readF
 ```
 目录：`$DSH_HOME/sessions/<工作区>/<会话id>/session.v4.jsonl.zstd`（本机 `C:\Users\Kayle\.dsh\sessions\--D-DeepSeek~0020Harness-Works--/…`）。
 
+- **本机实测（2026-10-18）：「逐帧解压」不是修辞，单次调用真的只拿到开头一小截**。同一份 `session.v4.jsonl.zstd`（11325279 字节），`zstdDecompressSync` 直接调用只返回 **192 字符**（另一份回 207、282 字符，随首帧大小浮动），而按魔数 `28 B5 2F FD` 逐帧切开、逐帧解压再拼接，同一文件得 **26854804 字符**（魔数命中 5754 处、5754 帧全部解压成功、失败 0）。即：拿单次调用的输出判「日志里没有这条」，会稳定误判成「没发生」。
+- **真实文件名是 `session.v4.jsonl.zstd`，不是 `session.jsonl.zstd`**——本机 `$DSH_HOME/sessions` 下 290 个文件全部是前者；按后者去 open 会得到 `Error: ENOENT: no such file or directory, open '<DSH_HOME>\sessions\<工作区>\<会话id>\session.jsonl.zstd'`（实测原样）。也是为什么按 `session.jsonl.zstd` 匹配的扫描器会「一个文件都找不到」。
+- 与 preset 册 §6.18「多帧 zstd 会话日志不能只读首帧」是同一坑的两个仓内记录，那边给了按帧边界解压的实现（`scripts/analyze-sessions.mjs:8-46,60-89`），本仓可直接借。
+- **未验证**：上述字符数只在本机这几份文件上测过，不是普适阈值；判「读全了」应当看末尾帧有没有解出来，别拿字符数当判据。
+
 ### 6.6 改动的生效边界（别白折腾）
 
 | 改了什么 | 怎么生效 |
